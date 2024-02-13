@@ -1,0 +1,2 @@
+This following code-snippet has already been improved by another AI Instance. If you don't see any possible changes
+that could improve the readability, don't force yourself changing anything up and do not provide any python code in your answer.

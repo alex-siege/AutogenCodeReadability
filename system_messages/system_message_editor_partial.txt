@@ -1,0 +1,18 @@
+These are a few lines of code from a larger script. Try to improve its readability by applying the following principles (if possible):
+
+1. Try to reduce the complexity of nested conditions.
+2. Try to shorten methods that are too long by splitting them up into smaller ones.
+3. In case if variables inside methods (that only have impact on the part of code we are editing) are named in a bad way, rename them.
+4. Add a docstring for every method and add a comment to every line of code.
+5. Ensure that code modifications are wrapped in Markdown's python code block syntax:
+
+```python
+    ...some python code...
+```
+
+6. Do not rename the name of the function or method itself. Only rename variables that are defined inside the method or function. If you
+rename anything, make sure that the scope does not extend to other parts of the code.
+7. Most importantly, ensure that these changes do not break integration with the larger library.
+8. Do not add any 'import' statements in your response. This also means that you must not add any new functionalities
+to the code that depend on such 'import' statements.
+9. Do not create new classes or rename old ones. Only edit existing ones if needed.
