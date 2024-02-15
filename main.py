@@ -1,6 +1,7 @@
 from helper_main import *
 from gui import *
 
+
 def main_loop():
     # 1. Setup ==================================================================================================================
     # 1.1 Clean Up (Removing all existing files associated with the current project from previous runs)
@@ -46,7 +47,7 @@ def main_loop():
         previous_mi = retrieve_readability_index_from_csv(
             edit_readability_rating_project, file_name, 'MI')
 
-        print('Previous and Current MI: ' + str(previous_mi) + ' ' + str(current_mi))
+        print('Previous and Current MI: ' + str(previous_mi) + ' ' + str(current_mi)) if not suppress_misc_info else None
 
         # 2.6 Set up the while-loop that iterates over the
         # Runs at least once and as long as there's Improvement of the Maintainability Index in any of the files
@@ -81,7 +82,7 @@ def main_loop():
             # 2.6.5 Update the readability measurement in order to decide if to continue running the while-loop
             current_mi = retrieve_readability_index_from_csv(
                 edit_readability_rating_project, file_name, 'MI')
-            print('Previous and Current MI After: ' + str(previous_mi) + ' ' + str(current_mi))
+            print('Previous and Current MI After: ' + str(previous_mi) + ' ' + str(current_mi)) if not suppress_misc_info else None
 
     # 3. Visualizing Results ====================================================================================================
     plot_readability_metrics(

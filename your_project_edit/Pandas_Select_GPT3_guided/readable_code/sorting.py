@@ -66,48 +66,54 @@ def get_indexer_indexer(
     key: IndexKeyFunc,
 ) -> npt.NDArray[np.intp] | None:
     """
-    This method returns the indexer according to input parameters for the sort_index
-    method of DataFrame and Series.
+    Helper method that returns the indexer according to input parameters for
+    the sort_index method of DataFrame and Series.
+
+    Parameters
+    ----------
+    target : Index
+    level : int or level name or list of ints or list of level names
+    ascending : bool or list of bools, default True
+    kind : {'quicksort', 'mergesort', 'heapsort', 'stable'}
+    na_position : {'first', 'last'}
+    sort_remaining : bool
+    key : callable, optional
+
+    Returns
+    -------
+    Optional[ndarray[intp]]
+        The indexer for the new index.
     """
 
-    # Ensure key is mapped correctly according to levels
+    # Ensure key is mapped and sort levels
     # type: ignore[assignment]
     target = ensure_key_mapped(target, key, levels=level)
-
-    # Sort the levels of the target (if any) in a monotonic order
     target = target._sort_levels_monotonic()
 
-    # If levels exist in target, sort the target using sortlevel method.
     if level is not None:
+        # Sort by level
         _, indexer = target.sortlevel(
             level,
             ascending=ascending,
             sort_remaining=sort_remaining,
             na_position=na_position,
         )
-
-    # If target is already sorted according to the 'ascending' order, no need
-    # to do anything
     elif _is_monotonic(target, ascending):
         return None
-
-    # If target is a MultiIndex, get codes for sorting and sort based on these
-    # codes
     elif isinstance(target, ABCMultiIndex):
+        # Sort MultiIndex
         codes = [lev.codes for lev in target._get_codes_for_sorting()]
         indexer = lexsort_indexer(
             codes, orders=ascending, na_position=na_position, codes_given=True
         )
-
-    # In other cases (non-MultiIndex) sort based on the values in target
     else:
+        # Sort using nargsort
         indexer = nargsort(
             target,
             kind=kind,
             ascending=cast(bool, ascending),
             na_position=na_position,
         )
-
     return indexer
 
 
@@ -121,7 +127,14 @@ def get_group_index(
     labels, shape: Shape, sort: bool, xnull: bool
 ) -> npt.NDArray[np.int64]:
     """
-    Get the indices based on unique combinations of labels.
+    For the particular label_list, gets the offsets into the hypothetical list
+    representing the totally ordered cartesian product of all possible label
+    combinations, *as long as* this space fits within int64 bounds;
+    otherwise, though group indices identify unique combinations of
+    labels, they cannot be deconstructed.
+    - If `sort`, rank of returned ids preserve lexical ranks of labels.
+      i.e. returned id's can be used to do lexical sort on labels;
+    - If `xnull` nulls (-1 labels) are passed through.
 
     Parameters
     ----------
@@ -130,109 +143,123 @@ def get_group_index(
     shape : tuple[int, ...]
         Number of unique levels at each location
     sort : bool
-        If true, the returned indices will match the lexical ranks of labels
+        If the ranks of returned ids should match lexical ranks of labels
     xnull : bool
-        If true, nulls (-1 labels) will be excluded
+        If true nulls are excluded. i.e. -1 values in the labels are
+        passed through.
 
     Returns
     -------
-    An array of int64 type where two elements are equal if their corresponding
+    An array of type int64 where two elements are equal if their corresponding
     labels are equal at all location.
+
+    Notes
+    -----
+    The length of `labels` and `shape` must be identical.
     """
 
-    def calculate_cutoff(shape) -> int:
+    def _int64_cut_off(shape) -> int:
         """
-        Calculate the cutoff point for int64 bounds.
+        Calculate the cutoff point within the shape at which int64 bounds will be exceeded.
 
         Parameters
         ----------
         shape : tuple
-            The shape to evaluate
+            The shape to be evaluated
 
         Returns
         -------
         int
-            The index where the int64 bounds are exceeded.
+            The index point at which int64 bounds will be exceeded.
         """
-        product = 1
-        for i, val in enumerate(shape):
-            product *= int(val)
-            if product >= lib.i8max:
+        acc = 1
+        for i, mul in enumerate(shape):
+            acc *= int(mul)
+            if not acc < lib.i8max:
                 return i
         return len(shape)
 
-    def promote_nan_values(
-            labels_array, array_size: int) -> tuple[np.ndarray, int]:
+    def maybe_lift(labels_array, array_size: int) -> tuple[np.ndarray, int]:
         """
-        Promote nan values.
+        Promote nan values (assigned -1 label in lab array) so that all
+        output values are non-negative.
 
         Parameters
         ----------
         labels_array : np.ndarray
-            The labels array to be checked
+            The labels array to be evaluated
         array_size : int
-            Size of the labels array
+            The size of the labels array
 
         Returns
         -------
         tuple
-            Labels array with promoted values and new size
+            Tuple of the promoted labels array and the size
         """
-        if (labels_array == -1).any():
-            return labels_array + 1, array_size + 1
-        else:
-            return labels_array, array_size
+        return (
+            labels_array +
+            1,
+            array_size +
+            1) if (
+            labels_array == -
+            1).any() else (
+            labels_array,
+            array_size)
 
-    def cast_to_int64(array) -> np.ndarray:
+    def ensure_int64(array) -> np.ndarray:
         """
-        Cast array element's dtype to int64.
+        Ensures array is of type int64
 
         Parameters
         ----------
         array : np.ndarray
-            Array to cast
+            Array to evaluate type
 
         Returns
         -------
         np.ndarray
-            Array with int64 dtype.
+            Array of type int64
         """
         if array.dtype != np.int64:
             return array.astype(np.int64)
         return array
 
-    labels = [cast_to_int64(label) for label in labels]
-    shape_list = list(shape)
-
+    labels = [ensure_int64(x) for x in labels]
+    lshape = list(shape)
     if not xnull:
-        for idx, (label, size) in enumerate(zip(labels, shape)):
-            labels[idx], shape_list[idx] = promote_nan_values(label, size)
+        for i, (labels_array, array_size) in enumerate(zip(labels, shape)):
+            labels[i], lshape[i] = maybe_lift(labels_array, array_size)
+
+    labels = list(labels)
 
     while True:
-        cutoff = calculate_cutoff(shape_list)
-        stride = np.prod(shape_list[1:cutoff], dtype="i8")
-        output = stride * labels[0].astype("i8", subok=False, copy=False)
+        nlev = _int64_cut_off(lshape)
 
-        for i in range(1, cutoff):
-            stride = stride // shape_list[i] if shape_list[i] != 0 else np.int64(
-                0)
-            output += labels[i] * stride
+        stride = np.prod(lshape[1:nlev], dtype="i8")
+        out = stride * labels[0].astype("i8", subok=False, copy=False)
 
-        if xnull:  # Exclude nulls
+        for i in range(1, nlev):
+            if lshape[i] == 0:
+                stride = np.int64(0)
+            else:
+                stride //= lshape[i]
+            out += labels[i] * stride
+
+        if xnull:
             mask = labels[0] == -1
-            for label in labels[1:cutoff]:
-                mask |= label == -1
-            output[mask] = -1
+            for labels_array in labels[1:nlev]:
+                mask |= labels_array == -1
+            out[mask] = -1
 
-        if cutoff == len(shape_list):  # all levels done!
+        if nlev == len(lshape):
             break
 
-        # Order ids to retain lexical ranks and avoid overflow
-        compression_ids, obs_ids = compress_group_index(output, sort=sort)
-        labels = [compression_ids] + labels[cutoff:]
-        shape_list = [len(obs_ids)] + shape_list[cutoff:]
+        comp_ids, obs_ids = compress_group_index(out, sort=sort)
 
-    return output
+        labels = [comp_ids] + labels[nlev:]
+        lshape = [len(obs_ids)] + lshape[nlev:]
+
+    return out
 
 
 def get_compressed_ids(
@@ -255,7 +282,10 @@ def get_compressed_ids(
     np.ndarray[np.int64]
         obs_group_ids
     """
+    # Get the group index
     ids = get_group_index(labels, sizes, sort=True, xnull=False)
+
+    # Compress the group index
     return compress_group_index(ids, sort=True)
 
 
@@ -272,125 +302,94 @@ def _decons_group_index(
     """Deconstruct group indices into labels.
 
     Args:
-        comp_labels (npt.NDArray[np.intp]): Component labels of the group indices.
+        comp_labels (np.ndarray): Component labels of the group indices.
         shape (Shape): Shape of the indices.
 
     Raises:
         ValueError: If factorized group indices cannot be deconstructed.
 
     Returns:
-        list[npt.NDArray[np.intp]]: List of labels.
+        list[np.ndarray]: List of labels.
     """
 
-    # Check if an Integer Overflow is possible with given shape
     if is_int64_overflow_possible(shape):
-        raise ValueError("cannot deconstruct factorized group indices!")
+        raise ValueError("Cannot deconstruct factorized group indices!")
 
     label_list = []
     factor = 1
-    y_value = np.array(0)
-    x_value = comp_labels
+    y = np.array(0)
+    x = comp_labels
 
-    # Iterate over the range in reverse order
     for i in reversed(range(len(shape))):
-        # Compute label, mask and append to list
-        label, factor, y_value = compute_label_and_update_values(
-            x_value, factor, y_value, shape[i], comp_labels)
-        label_list.append(label)
+        labels = calculate_labels(x, y, factor, shape[i], comp_labels)
+        label_list.append(labels)
+        y = update_y(labels, factor)
+        factor = update_factor(factor, shape[i])
 
-    # Return the list in reverse order
     return label_list[::-1]
 
 
-def compute_label_and_update_values(x_value: npt.NDArray[np.intp],
-                                    factor: int,
-                                    y_value: npt.NDArray[np.intp],
-                                    shape_component: int,
-                                    comp_labels: npt.NDArray[np.intp]) -> Tuple[npt.NDArray[np.intp],
-                                                                                int,
-                                                                                npt.NDArray[np.intp]]:
-    """Compute the label and update factor and y values.
+def calculate_labels(x, y, factor, shape_i, comp_labels):
+    """Calculate labels based on input parameters."""
+    labels = (x - y) % (factor * shape_i) // factor
+    np.putmask(labels, comp_labels < 0, -1)
+    return labels
 
-    Args:
-        x_value (npt.NDArray[np.intp]): X value from the previous method.
-        factor (int): Factor value from the previous method.
-        y_value (npt.NDArray[np.intp]): Y value from the previous method.
-        shape_component (int): A component of the shape variable.
-        comp_labels (npt.NDArray[np.intp]): Component labels of the group indices.
 
-    Returns:
-        tuple: A tuple with updated label, factor and y value.
-    """
+def update_y(labels, factor):
+    """Update y based on labels and factor."""
+    return labels * factor
 
-    # Calculating label
-    label = (x_value - y_value) % (factor * shape_component) // factor
-    # put in mask where comp_labels < 0 is True
-    np.putmask(label, comp_labels < 0, -1)
 
-    # Updating y value with modified label and factor
-    y_value = label * factor
-
-    # Updating the factor
-    factor *= shape_component
-
-    # Return updated label, factor and y_value
-    return label, factor, y_value
+def update_factor(factor, shape_i):
+    """Update factor based on current factor and shape."""
+    return factor * shape_i
 
 
 def decons_obs_group_ids(
-    group_ids: npt.NDArray[np.intp],
-    observed_ids: npt.NDArray[np.intp],
-    array_shape: Shape,
-    group_labels: Sequence[npt.NDArray[np.signedinteger]],
-    exclude_null: bool,
+    comp_ids: npt.NDArray[np.intp],
+    obs_ids: npt.NDArray[np.intp],
+    shape: Shape,
+    labels: Sequence[npt.NDArray[np.signedinteger]],
+    xnull: bool,
 ) -> list[npt.NDArray[np.intp]]:
     """
-    This method tries to reconstruct group labels from observed group ids.
+    Reconstruct labels from observed group ids.
 
     Parameters
     ----------
-    group_ids : np.ndarray[np.intp]
-        The ids of the groups.
-    observed_ids: np.ndarray[np.intp]
-        The ids that are observed from the groups.
-    array_shape : tuple[int]
-        The shape of the array that includes the group id.
-    group_labels : Sequence[np.ndarray[np.signedinteger]]
-        The labels associated with the groups.
-    exclude_null : bool
-        If True, exclude nulls; i.e., -1 labels are passed through. If False, include nulls.
+    comp_ids : np.ndarray[np.intp]
+    obs_ids: np.ndarray[np.intp]
+    shape : tuple[int]
+    labels : Sequence[np.ndarray[np.signedinteger]]
+    xnull : bool
+        If nulls are excluded; i.e. -1 labels are passed through.
     """
 
-    # If nulls are not excluded, modify 'array_shape' by 'lifting' where
-    # labels are -1
-    if not exclude_null:
-        lift = np.fromiter(((label == -1).any()
-                           for label in group_labels), dtype=np.intp)
-        updated_shape = np.asarray(array_shape, dtype=np.intp) + lift
-        array_shape = tuple(updated_shape)
+    # Check if nulls are excluded and adjust shape accordingly
+    if not xnull:
+        lift = np.fromiter(((a == -1).any() for a in labels), dtype=np.intp)
+        arr_shape = np.asarray(shape, dtype=np.intp) + lift
+        shape = tuple(arr_shape)
 
-    # If the overflow is not possible, take the fast route of reconstructing
-    # using '_decons_group_index'
-    if not is_int64_overflow_possible(array_shape):
-        group_index_reconstructed = _decons_group_index(
-            observed_ids, array_shape)
-        if exclude_null or not lift.any():
-            return group_index_reconstructed
+    # Check if int64 overflow is possible
+    if not is_int64_overflow_possible(shape):
+        # obs ids are deconstructable! take the fast route!
+        out = _decons_group_index(obs_ids, shape)
+
+        # Return output based on conditions
+        if xnull or not lift.any():
+            return out
         else:
-            return [
-                index - lift_value for index,
-                lift_value in zip(
-                    group_index_reconstructed,
-                    lift)]
-
+            return [x - y for x, y in zip(out, lift)]
     else:
-        # If overflow is possible, use 'unique_label_indices' for indexing
-        unique_indices = unique_label_indices(group_ids)
+        # Get unique label indices and return adjusted labels
+        indexer = unique_label_indices(comp_ids)
         return [
-            label[unique_indices].astype(
+            lab[indexer].astype(
                 np.intp,
                 subok=False,
-                copy=True) for label in group_labels]
+                copy=True) for lab in labels]
 
 
 def lexsort_indexer(
@@ -401,348 +400,330 @@ def lexsort_indexer(
     codes_given: bool = False,
 ) -> npt.NDArray[np.intp]:
     """
-    This function performs lexical sorting on a set of keys
+    Performs lexical sorting on a set of keys
 
     Parameters
     ----------
     keys : Sequence[ArrayLike | Index | Series]
-        Sequence of Series/enumerable items to be sorted by the indexer
+        Sequence of arrays to be sorted by the indexer
+        Sequence[Series] is only if key is not None.
     orders : bool or list of booleans, optional
-        Bool defining sorting order: True for ascending, False for descending
-        Can also be applied to each key individually by providing a list
+        Determines the sorting order for each element in keys. If a list,
+        it must be the same length as keys. This determines whether the
+        corresponding element in keys should be sorted in ascending
+        (True) or descending (False) order. if bool, applied to all
+        elements as above. if None, defaults to True.
     na_position : {'first', 'last'}, default 'last'
-        The placement of NA elements in the sorted keys. Either at the end ('last'), or at the start ('first').
+        Determines placement of NA elements in the sorted list ("last" or "first")
     key : Callable, optional
-        A function applied to every element in keys before sorting
-    codes_given: bool, optional, default False
-        Indicator to skip conversion of keys to categorical if codes are provided in advance
+        Callable key function applied to every element in keys before sorting
+    codes_given: bool, False
+        Avoid categorical materialization if codes are already provided.
 
     Returns
     -------
-    np.ndarray
-        A numpy array providing the sorted indexer for keys
+    np.ndarray[np.intp]
     """
     from pandas.core.arrays import Categorical
 
-    # Ensure valid na_position value
     if na_position not in ["last", "first"]:
         raise ValueError(f"invalid na_position: {na_position}")
 
-    orders = normalize_orders(keys, orders)
-
-    labels = process_keys(keys, orders, key, codes_given, na_position)
-
-    # Reverse the labels and use numpy's lexsort function to return the sorted
-    # indexer
-    return np.lexsort(labels[::-1])
-
-
-def normalize_orders(keys, orders):
-    """
-    Check and normalize the orders parameter to
-    have a definite format of a list with len matching keys []
-    """
     if isinstance(orders, bool):
-        return [orders] * len(keys)
+        orders = [orders] * len(keys)
     elif orders is None:
-        return [True] * len(keys)
-    else:
-        return orders
+        orders = [True] * len(keys)
 
-
-def process_keys(keys, orders, key, codes_given, na_position):
-    """
-    Map and process the keys according to the sort orders,
-    key function, na_position, and whether the ordered codes are already given.
-    """
-    from pandas.core.arrays import Categorical
     labels = []
 
-    for key_elem, order in zip(keys, orders):
-        key_elem = ensure_key_mapped(key_elem, key)
-
+    for k, order in zip(keys, orders):
+        k = ensure_key_mapped(k, key)
         if codes_given:
-            ordered_codes = cast(np.ndarray, key_elem)
-            code_length = ordered_codes.max() + 1 if len(ordered_codes) else 0
+            codes = cast(np.ndarray, k)
+            n = codes.max() + 1 if len(codes) else 0
         else:
-            cat = Categorical(key_elem, ordered=True)
-            ordered_codes = cat.codes
-            code_length = len(cat.categories)
+            cat = Categorical(k, ordered=True)
+            codes = cat.codes
+            n = len(cat.categories)
 
-        mask = ordered_codes == -1
+        mask = codes == -1
 
         if na_position == "last" and mask.any():
-            ordered_codes = np.where(mask, code_length, ordered_codes)
+            codes = np.where(mask, n, codes)
 
         # not order means descending
         if not order:
-            ordered_codes = np.where(
-                mask, ordered_codes, code_length - ordered_codes - 1)
+            codes = np.where(mask, codes, n - codes - 1)
 
-        labels.append(ordered_codes)
+        labels.append(codes)
 
-    return labels
+    return np.lexsort(labels[::-1])
 
 
 def nargsort(
-    items,
-    kind="quicksort",
-    ascending=True,
-    na_position="last",
-    key=None,
-    mask=None,
-):
+    items: ArrayLike | Index | Series,
+    kind: SortKind = "quicksort",
+    ascending: bool = True,
+    na_position: str = "last",
+    key: Callable | None = None,
+    mask: npt.NDArray[np.bool_] | None = None,
+) -> npt.NDArray[np.intp]:
     """
-    This function sorts given items while handling NaN values. It can sort in ascending or descending order,
-    and it can place NaN values either at the beginning or at the end. This function is envisioned as a direct replacement for np.argsort.
+    Intended to be a drop-in replacement for np.argsort which handles NaNs.
 
-    parameters:
-    items: np.ndarray, ExtensionArray, Index, or Series
-    kind : { 'quicksort', 'mergesort', 'heapsort', 'stable'}, default 'quicksort' -> sorting algorithm
-    ascending : bool, default=True -> defines the sorting order
-    na_position : {'first', 'last'}, default 'last' -> Position for NaN values
-    key : Callable, default= None -> key to sort by
-    mask: np.ndarray[bool], default= None -> mask to put on items.
+    Adds ascending, na_position, and key parameters.
 
-    Returns:
-    np.ndarray[int]: The sorted items as an array
+    (GH #6399, #5231, #27237)
+
+    Parameters
+    ----------
+    items : np.ndarray, ExtensionArray, Index, or Series
+    kind : {'quicksort', 'mergesort', 'heapsort', 'stable'}, default 'quicksort'
+    ascending : bool, default True
+    na_position : {'first', 'last'}, default 'last'
+    key : Optional[Callable], default None
+    mask : Optional[np.ndarray[bool]], default None
+        Passed when called by ExtensionArray.argsort.
+
+    Returns
+    -------
+    np.ndarray[np.intp]
     """
 
-    # if a key is given map it to items
-    if key:
-        items = key_mapped_item(items, key)
-        return nargsort(items, kind, ascending, na_position, None, mask)
+    if key is not None:
+        # see TestDataFrameSortKey, TestRangeIndex::test_sort_values_key
+        items = ensure_key_mapped(items, key)
+        return nargsort(
+            items,
+            kind=kind,
+            ascending=ascending,
+            na_position=na_position,
+            key=None,
+            mask=mask,
+        )
 
-    # if item is a range index, return sorted items. If it is not a
-    # multi-index, convert to an array
     if isinstance(items, ABCRangeIndex):
-        return items.argsort(ascending)
+        return items.argsort(ascending=ascending)
     elif not isinstance(items, ABCMultiIndex):
-        items = array_from_items(items)
-
-    # raise an error for multi-index
+        items = extract_array(items)
     else:
         raise TypeError(
-            "nargsort does not support MultiIndex. Use index.sort_values instead.")
+            "nargsort does not support MultiIndex. Use index.sort_values instead."
+        )
 
-    # apply a mask for NaN values
     if mask is None:
-        mask = create_nan_mask(items)
+        mask = np.asarray(isna(items))
 
-    # sort and return items if not an array
     if not isinstance(items, np.ndarray):
-        return items.argsort(ascending, kind, na_position)
+        return _argsort_extension_array(items, ascending, kind, na_position)
 
-    idx = create_index(len(items))
-    non_nans, non_nan_idx = get_non_nan_items(items, mask)
+    return _argsort_np_array(items, mask, ascending, kind, na_position)
 
-    # handle NaN values
-    nan_idx = get_nan_idx(mask)
+
+def _argsort_extension_array(items, ascending, kind, na_position):
+    return items.argsort(
+        ascending=ascending,
+        kind=kind,
+        na_position=na_position,
+    )
+
+
+def _argsort_np_array(items, mask, ascending, kind, na_position):
+    idx = np.arange(len(items))
+    non_nans = items[~mask]
+    non_nan_idx = idx[~mask]
+
+    nan_idx = np.nonzero(mask)[0]
     if not ascending:
-        non_nans, non_nan_idx = reverse_items(non_nans, non_nan_idx)
-
-    indexer = get_indexer(non_nans, non_nan_idx, kind)
-
-    # reverse the order if items are not in ascending order
+        non_nans = non_nans[::-1]
+        non_nan_idx = non_nan_idx[::-1]
+    indexer = non_nan_idx[non_nans.argsort(kind=kind)]
     if not ascending:
-        indexer = reverse_items(indexer)
+        indexer = indexer[::-1]
 
-    # place NaNs at the beginning or end based on na_position
+    indexer = _handle_na_position(indexer, na_position, nan_idx)
+    return ensure_platform_int(indexer)
+
+
+def _handle_na_position(indexer, na_position, nan_idx):
     if na_position == "last":
-        indexer = concatenate_indexes(indexer, nan_idx)
+        return np.concatenate([indexer, nan_idx])
     elif na_position == "first":
-        indexer = concatenate_indexes(nan_idx, indexer)
+        return np.concatenate([nan_idx, indexer])
     else:
         raise ValueError(f"invalid na_position: {na_position}")
-    return platform_int_conversion(indexer)
 
 
 def nargminmax(values: ExtensionArray, method: str, axis: AxisInt = 0):
     """
-    Implementation of np.argmin/argmax but for ExtensionArray and handles missing values.
+    Implementation of np.argmin/argmax but for ExtensionArray and which
+    handles missing values.
 
     Parameters
     ----------
     values : ExtensionArray
-        Input array of values to compute argmin/argmax.
-    method : str
-        Method to use for computation. Either {"argmax", "argmin"}.
+    method : {"argmax", "argmin"}
     axis : int, default 0
-        Axis along which to compute argmin/argmax.
 
     Returns
     -------
     int
-        Index of minimum or maximum value, depending on the 'method' parameter.
     """
-    # Verify the method parameter to ensure it's the correct value
     assert method in {"argmax", "argmin"}
 
-    # Choose correct function (np.argmax or np.argmin) depending on the input
-    # method
-    minmax_func = np.argmax if method == "argmax" else np.argmin
+    # Set the appropriate function based on the method parameter
+    func = np.argmax if method == "argmax" else np.argmin
 
-    # Prepare the array values for argument sorting
-    prepared_values = values._values_for_argsort()
+    # Check the dimensions of the values array
+    arr_values = values._values_for_argsort()
+    mask = np.asarray(isna(values))
 
-    # Get a boolean mask indicating missing values in the input array
-    missing_values_mask = np.asarray(isna(values))
-
-    if prepared_values.ndim > 1:
-        return handle_multidimensional_array(
-            prepared_values, missing_values_mask, minmax_func, axis)
+    if arr_values.ndim > 1:
+        if mask.any():
+            if axis == 1:
+                zipped = zip(arr_values, mask)
+            else:
+                zipped = zip(arr_values.T, mask.T)
+            # Apply _nanargminmax function to each pair of values and masks
+            return np.array([_apply_nanargminmax(v, m, func)
+                            for v, m in zipped])
+        else:
+            # Apply func along the axis
+            return func(arr_values, axis=axis)
     else:
-        return handle_single_dimension_array(
-            prepared_values, missing_values_mask, minmax_func)
-
-
-def handle_multidimensional_array(
-        values,
-        missing_values_mask,
-        minmax_func,
-        axis):
-    """
-    Handles the argmin/argmax computation for multi-dimensional arrays.
-    """
-    if missing_values_mask.any():
-        return handle_missing_values(
-            values, missing_values_mask, minmax_func, axis)
-    else:
-        # Directly apply the minmax function along the specified axis
-        return minmax_func(values, axis=axis)
-
-
-def handle_single_dimension_array(values, missing_values_mask, minmax_func):
-    """
-    Handles the argmin/argmax computation for single-dimensional arrays.
-    """
-    # Apply the _nanargminmax function to the values and mask
-    return _nanargminmax(values, missing_values_mask, minmax_func)
-
-
-def handle_missing_values(values, missing_values_mask, minmax_func, axis):
-    """
-    Handles the computation when missing values are present, returning the minimum/maximum index neglecting missing values.
-    """
-    values_mask_pairs = zip(
-        values.T, missing_values_mask.T) if axis == 1 else zip(
-        values, missing_values_mask)
-    return np.array([_nanargminmax(val_mask[0], val_mask[1], minmax_func)
-                    for val_mask in values_mask_pairs])
+        # Apply the _nanargminmax function to the single pair of values and
+        # mask
+        return _apply_nanargminmax(arr_values, mask, func)
 
 
 def _nanargminmax(values: np.ndarray,
                   mask: npt.NDArray[np.bool_],
                   func) -> int:
     """
-    Returns the index of the minimum or maximum value in a numpy array, ignoring any NaN values.
+    Returns the index of the minimum or maximum value in an array, ignoring any NaN values.
 
     Args:
-        values (np.ndarray): A numpy array containing numerical data.
-        mask (npt.NDArray[np.bool_]): A boolean mask, in the same shape as 'values', where True indicates a NaN value in the 'values' array.
-        func: A function used to find either the minimum or the maximum. This can be np.nanargmin or np.nanargmax.
+        values: numpy array of values.
+        mask: boolean mask indicating which values are NaN.
+        func: function to calculate the minimum or maximum value, such as `np.nanargmin` or `np.nanargmax`.
 
     Returns:
-        int: The index of the minimum or maximum value in the 'values' array, ignoring NaN values.
+        The index of the minimum or maximum value in the array, after ignoring any NaN values.
     """
-    # Generate an array with elements from 0 up to the length of 'values'
-    indices = np.arange(values.shape[0])
+    # Create an array of indices
+    idx = np.arange(values.shape[0])
 
-    # Remove NaNs from 'values' using the 'mask'
-    non_nan_values = values[~mask]
+    # Filter out NaN values
+    non_nans = values[~mask]
+    non_nan_idx = idx[~mask]
 
-    # Get the corresponding indices of the non-NaN values in 'values'
-    non_nan_indices = indices[~mask]
-
-    # Use the input function to find the index of the min/max non-NaN value
-    return non_nan_indices[func(non_nan_values)]
+    # Return the index of the minimum or maximum value after ignoring NaN
+    # values
+    return non_nan_idx[func(non_nans)]
 
 
 def _ensure_key_mapped_multiindex(
-        index: MultiIndex,
-        key_function: Callable,
-        level=None) -> MultiIndex:
+    index: MultiIndex, key: Callable, level=None
+) -> MultiIndex:
     """
-    Returns a new MultiIndex in which the key function has been applied
-    to all levels specified in 'level' (or all levels if 'level' is None).
-    Used for key sorting for MultiIndex.
+    Returns a new MultiIndex in which key has been applied
+    to all levels specified in level (or all levels if level
+    is None). Used for key sorting for MultiIndex.
 
     Parameters
     ----------
-    index : MultiIndex. The index to which the key function is to be applied.
-    key_function : Callable. The function that takes an Index and returns an Index of
-                   the same shape. This key is applied to each level separately.
-                   The name of the level can be used to distinguish different levels for application.
-    level : list-like, int or str, default None. Level or list of levels to apply the key function to.
-            If None, key function is applied to all levels. Other levels are left unchanged.
+    index : MultiIndex
+        Index to which to apply the key function on the
+        specified levels.
+    key : Callable
+        Function that takes an Index and returns an Index of
+        the same shape. This key is applied to each level
+        separately. The name of the level can be used to
+        distinguish different levels for application.
+    level : list-like, int or str, default None
+        Level or list of levels to apply the key function to.
+        If None, key function is applied to all levels. Other
+        levels are left unchanged.
 
     Returns
     -------
-    changed_multi_index : MultiIndex. The resulting MultiIndex with modified levels.
+    labels : MultiIndex
+        Resulting MultiIndex with modified levels.
     """
 
-    # Get levels to apply the key function to
-    sort_levels = [level] if isinstance(
-        level, (str, int)) else list(
-        range(
-            index.nlevels)) if level is None else level
+    # Determine the levels to apply the key function to
+    if level is not None:
+        sort_levels = [level] if isinstance(level, (str, int)) else level
+    else:
+        sort_levels = list(range(index.nlevels))
 
-    # Apply key function to specified levels
-    mapped_indexes = [
-        ensure_key_mapped(
-            index._get_level_values(level),
-            key_function) if level in sort_levels else index._get_level_values(level) for level in range(
-            index.nlevels)]
+    # Apply the key function to the specified levels
+    mapped = [
+        ensure_key_mapped(index._get_level_values(level), key) if level in sort_levels
+        else index._get_level_values(level)
+        for level in range(index.nlevels)
+    ]
 
     # Return a new MultiIndex with modified levels
-    changed_multi_index = type(index).from_arrays(mapped_indexes)
-
-    return changed_multi_index
+    return type(index).from_arrays(mapped)
 
 
-def map_key_to_values(values, key, levels=None):
+def ensure_key_mapped(
+        values: ArrayLike | Index | Series,
+        key: Callable | None,
+        levels=None) -> ArrayLike | Index | Series:
     """
-    Apply a callable key function to the values and ensure that the resulting array has the same shape.
+    Applies a callable key function to the values function and checks
+    that the resulting value has the same shape. Can be called on Index
+    subclasses, Series, DataFrames, or ndarrays.
 
-    Parameters:
+    Parameters
     ----------
-    values : array-like, Series, or Index
-        Input values to apply the key function on.
-    key : callable, optional
-        The function to apply to the values. None means return original values.
-    levels : list, default None
-        If the values are a MultiIndex, specifies levels to apply key.
-
-    Returns:
-    -------
-    array-like, Series, or Index:
-        Resulting values after applying the key function.
+    values : Series, DataFrame, Index subclass, or ndarray
+    key : Optional[Callable], key to be called on the values array
+    levels : Optional[List], if values is a MultiIndex, list of levels to
+    apply the key to.
     """
+    from pandas.core.indexes.api import Index
 
     if not key:
         return values
 
     if isinstance(values, ABCMultiIndex):
-        return apply_key_to_multiindex(values, key, levels)
+        return _ensure_key_mapped_multiindex(values, key, level=levels)
 
+    result = _apply_key_function(values, key)
+
+    return _convert_result_to_original_type(result, values)
+
+
+def _apply_key_function(values, key):
+    """
+    Apply the key function to the values and check if the resulting value has the same shape as the original value.
+    """
     result = key(values.copy())
 
     if len(result) != len(values):
         raise ValueError(
-            "User-provided `key` function must not change array shape.")
-
-    try:
-        if isinstance(values, Index):
-            result = Index(result)
-        else:
-            values_class = type(values)
-            result = values_class(result)
-    except TypeError:
-        raise TypeError(
-            f"User-provided `key` function returned incompatible type {type(result)}.\
-                        Cannot convert to original type `{type(values)}`.")
+            "User-provided `key` function must not change the shape of the array.")
 
     return result
+
+
+def _convert_result_to_original_type(result, values):
+    """
+    Convert the result to the original type (Index subclass, Series, DataFrame, or ndarray).
+    """
+    try:
+        if isinstance(values, Index):
+            return Index(result)
+        else:
+            type_of_values = type(values)
+            return type_of_values(result)
+    except TypeError:
+        raise TypeError(
+            f"User-provided `key` function returned an invalid type {type(result)} \
+            which could not be converted to {type(values)}.")
 
 
 def get_flattened_list(
@@ -763,7 +744,10 @@ def get_flattened_list(
     Returns:
     A list of tuples representing the flattened list.
     """
+    # Convert comp_ids to int64
     comp_ids = comp_ids.astype(np.int64, copy=False)
+
+    # Initialize a dictionary to store arrays
     arrays: DefaultDict[int, list[int]] = defaultdict(list)
 
     # Mapping the compressed group ids to key tuples
@@ -781,47 +765,59 @@ def get_indexer_dict(label_list: list[np.ndarray],
                      keys: list[Index]) -> dict[Hashable,
                                                 npt.NDArray[np.intp]]:
     """
-    This function returns a dictionary that maps labels to indexers.
-
-    Parameters:
-    label_list: list of labels
-    keys: list of index
-
-    Returns:
-    dictionary: mapping labels to indexers
+    Returns a dictionary mapping labels to indexers.
     """
-    # calculating shape of indexers
-    shape_of_indexers = tuple(len(key) for key in keys)
+    # Calculate the shape of the indexers
+    shape = tuple(len(x) for x in keys)
 
-    # getting the group_index
-    group_index_data = get_group_index(
-        label_list, shape_of_indexers, sort=True, xnull=True)
+    # Get the group index
+    group_index = get_group_index(label_list, shape, sort=True, xnull=True)
 
-    # if all elements are -1, return an empty dictionary
-    if np.all(group_index_data == -1):
+    # If all elements are -1, return an empty dictionary
+    if np.all(group_index == -1):
         return {}
 
-    # checking if int64_overflow is possible and calculating number of groups
-    # accordingly
-    no_of_groups = (
-        (group_index_data.size and group_index_data.max()) +
-        1) if is_int64_overflow_possible(shape_of_indexers) else np.prod(
-        shape_of_indexers,
-        dtype="i8")
+    # Calculate the number of groups
+    ngroups = calculate_number_of_groups(group_index, shape)
 
-    # getting the sorter to sort the labels and group index
-    sorter_value = get_group_index_sorter(group_index_data, no_of_groups)
+    # Sort the labels and group index using the sorter
+    sorted_labels, group_index = sort_labels_and_group_index(
+        label_list, group_index)
 
-    # sorting the labels and group index
-    sorted_labels_list = [label.take(sorter_value) for label in label_list]
-    sorted_group_index = group_index_data.take(sorter_value)
+    # Return the result from lib.indices_fast
+    return get_indices_fast(group_index, keys, sorted_labels)
 
-    # returning a dictionary mapping labels to indexers
-    return lib.indices_fast(
-        sorter_value,
-        sorted_group_index,
-        keys,
-        sorted_labels_list)
+
+def calculate_number_of_groups(group_index: np.ndarray, shape: tuple) -> int:
+    """
+    Calculate the number of groups based on group_index and shape.
+    """
+    return (
+        ((group_index.size and group_index.max()) + 1)
+        if is_int64_overflow_possible(shape)
+        else np.prod(shape, dtype="i8")
+    )
+
+
+def sort_labels_and_group_index(
+        label_list: list[np.ndarray], group_index: np.ndarray) -> tuple:
+    """
+    Sort the labels and group index using the sorter.
+    """
+    sorter = get_group_index_sorter(group_index, group_index.size)
+    sorted_labels = [lab.take(sorter) for lab in label_list]
+    group_index = group_index.take(sorter)
+    return sorted_labels, group_index
+
+
+def get_indices_fast(group_index: np.ndarray,
+                     keys: list[Index],
+                     sorted_labels: list[np.ndarray]) -> dict[Hashable,
+                                                              npt.NDArray[np.intp]]:
+    """
+    Return the result from lib.indices_fast.
+    """
+    return lib.indices_fast(group_index, keys, sorted_labels)
 
 
 # ----------------------------------------------------------------------
@@ -829,7 +825,7 @@ def get_indexer_dict(label_list: list[np.ndarray],
 
 
 def get_group_index_sorter(
-        group_index: np.ndarray[np.intp], total_groups: int | None = None) -> np.ndarray[np.intp]:
+        group_index: np.ndarray[np.intp], ngroups: int | None = None) -> np.ndarray[np.intp]:
     """
     Implements `counting sort` and `np.argsort(kind='mergesort')` algorithms for sorting group indices.
     Both algorithms are stable sorts, necessary for correctness of groupby operations.
@@ -838,54 +834,46 @@ def get_group_index_sorter(
     ----------
     group_index : np.ndarray[np.intp]
         The group index to be sorted.
-    total_groups : int or None, default None
-        The total number of groups. If None, it is calculated as 1 + group_index.max().
+    ngroups : int or None, default None
+        The number of groups. If None, it is calculated as 1 + group_index.max().
 
     Returns
     -------
     np.ndarray[np.intp]
         The sorted group index.
     """
-    if total_groups is None:
-        total_groups = 1 + group_index.max()
+    def calculate_ngroups(
+            group_index: np.ndarray[np.intp], ngroups: int | None) -> int:
+        if ngroups is None:
+            return 1 + group_index.max()
+        return ngroups
 
-    index_length = len(group_index)
-    alpha_value = 0.0  # taking complexities literally; there may be
-    beta_value = 1.0   # some room for fine-tuning these parameters
+    def should_use_counting_sort(
+            count: int,
+            ngroups: int,
+            alpha: float = 0.0,
+            beta: float = 1.0) -> bool:
+        return count > 0 and (
+            (alpha +
+             beta *
+             ngroups) < (
+                count *
+                np.log(count)))
 
-    # Check if counting sort should be used
-    use_counting_sort = index_length > 0 and (
-        (alpha_value +
-         beta_value *
-         total_groups) < (
-            index_length *
-            np.log(index_length)))
+    ngroups = calculate_ngroups(group_index, ngroups)
+    count = len(group_index)
 
-    if use_counting_sort:
-        # Use group sort if conditions meet
-        sorted_index, _ = algos.groupsort_indexer(
+    do_groupsort = should_use_counting_sort(count, ngroups)
+
+    if do_groupsort:
+        sorter, _ = algos.groupsort_indexer(
             ensure_platform_int(group_index),
-            total_groups
+            ngroups
         )
     else:
-        # Use np.argsort with mergesort if counting sort is not required
-        sorted_index = group_index.argsort(kind="mergesort")
+        sorter = group_index.argsort(kind="mergesort")
 
-    return ensure_platform_int(sorted_index)
-
-
-def _handle_sorted_group_index(group_index):
-    """
-    Handles sorted group index
-    It identifies unique groups and calculates corresponding compact indices.
-    :param group_index: Sorted group index
-    :return: tuple of compact indices (comp_ids) and the list of unique labels (obs_group_ids)
-    """
-    unique_mask = np.concatenate(
-        [group_index[:1] > -1, group_index[1:] != group_index[:-1]])
-    comp_ids = unique_mask.cumsum() - 1
-    obs_group_ids = group_index[unique_mask]
-    return comp_ids, obs_group_ids
+    return ensure_platform_int(sorter)
 
 
 def compress_group_index(
@@ -903,10 +891,14 @@ def compress_group_index(
     """
     if len(group_index) and np.all(group_index[1:] >= group_index[:-1]):
         # Fast path for sorted group_index
-        comp_ids, obs_group_ids = _handle_sorted_group_index(group_index)
+        unique_mask = np.concatenate(
+            [group_index[:1] > -1, group_index[1:] != group_index[:-1]])
+        comp_ids = unique_mask.cumsum() - 1
+        obs_group_ids = group_index[unique_mask]
     else:
         size_hint = len(group_index)
         table = hashtable.Int64HashTable(size_hint)
+
         group_index = ensure_int64(group_index)
 
         # Group labels come out ascending (i.e., 1, 2, 3 etc)
@@ -919,43 +911,79 @@ def compress_group_index(
     return ensure_int64(comp_ids), ensure_int64(obs_group_ids)
 
 
-def _reorder_by_uniques(uniques: npt.NDArray[np.int64],
-                        labels: npt.NDArray[np.intp]) -> tuple[npt.NDArray[np.int64],
-                                                               npt.NDArray[np.intp]]:
+def _reorder_by_uniques(
+    uniques: npt.NDArray[np.int64], labels: npt.NDArray[np.intp]
+) -> tuple[npt.NDArray[np.int64], npt.NDArray[np.intp]]:
     """
-    Rearrange array of labels based on order of unique values.
+    Rearrange the array of labels based on the order of unique values.
 
     Parameters
     ----------
     uniques : np.ndarray[np.int64]
-        Array of unique values.
+        The array of unique values.
     labels : np.ndarray[np.intp]
-        Array of labels
+        The array of labels.
 
     Returns
     -------
-    tuple
-        rearranged array of unique values and array of labels
+    np.ndarray[np.int64]
+        The rearranged array of unique values.
+    np.ndarray[np.intp]
+        The rearranged array of labels.
     """
-    # Getting the indexes that would sort the unique values
-    indexes_of_sorted_uniques = uniques.argsort()
+    # Sort the unique values
+    sorter = uniques.argsort()
 
-    # Create new array to map uniques back to original order
-    reverse_indexer = np.empty(len(indexes_of_sorted_uniques), dtype=np.intp)
-    # Map each element to its index in the sorted list
-    reverse_indexer.put(
-        indexes_of_sorted_uniques, np.arange(
-            len(indexes_of_sorted_uniques)))
+    # Create reverse indexer to keep track of where elements came from
+    reverse_indexer = _create_reverse_indexer(sorter)
 
-    # Identify the indexes of negative labels
-    negative_label_locations = labels < 0
-    # Apply the new order (reverse_indexer) to labels while preserving
-    # original locations of negative labels
-    reordered_labels = reverse_indexer.take(labels)
-    # Replace negative labels with -1 in the reordered labels
-    np.putmask(reordered_labels, negative_label_locations, -1)
+    # Rearrange labels based on the reverse indexer
+    labels = _rearrange_labels(labels, reverse_indexer)
 
-    # Reorder the unique values based on the indexes of sorted uniques
-    reordered_uniques = uniques.take(indexes_of_sorted_uniques)
+    # Rearrange the unique values
+    uniques = uniques.take(sorter)
 
-    return reordered_uniques, reordered_labels
+    return uniques, labels
+
+
+def _create_reverse_indexer(
+        sorter: npt.NDArray[np.int64]) -> npt.NDArray[np.intp]:
+    """
+    Create a reverse indexer to keep track of where elements came from.
+
+    Parameters
+    ----------
+    sorter : np.ndarray[np.int64]
+        The sorted array.
+
+    Returns
+    -------
+    np.ndarray[np.intp]
+        The reverse indexer array.
+    """
+    reverse_indexer = np.empty(len(sorter), dtype=np.intp)
+    reverse_indexer.put(sorter, np.arange(len(sorter)))
+    return reverse_indexer
+
+
+def _rearrange_labels(
+        labels: npt.NDArray[np.intp], reverse_indexer: npt.NDArray[np.intp]) -> npt.NDArray[np.intp]:
+    """
+    Rearrange labels based on the reverse indexer.
+
+    Parameters
+    ----------
+    labels : np.ndarray[np.intp]
+        The array of labels.
+    reverse_indexer : np.ndarray[np.intp]
+        The reverse indexer array.
+
+    Returns
+    -------
+    np.ndarray[np.intp]
+        The rearranged array of labels.
+    """
+    mask = labels < 0
+    labels = reverse_indexer.take(labels)
+    np.putmask(labels, mask, -1)
+    return labels

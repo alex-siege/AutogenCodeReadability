@@ -24,20 +24,6 @@
             </Attribute>
           </value>
         </entry>
-        <entry key="\your_project_edit\Pandas_Select_GPT3_free\readability_rating\pass_manager.csv">
-          <value>
-            <Attribute>
-              <option name="separator" value="," />
-            </Attribute>
-          </value>
-        </entry>
-        <entry key="\your_project_edit\Pandas_Select_GPT3_free\readability_rating\sorting.csv">
-          <value>
-            <Attribute>
-              <option name="separator" value="," />
-            </Attribute>
-          </value>
-        </entry>
         <entry key="\your_project_edit\Pandas_Select_GPT4\readability_rating\sorting.csv">
           <value>
             <Attribute>

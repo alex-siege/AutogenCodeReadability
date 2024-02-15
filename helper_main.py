@@ -1,4 +1,4 @@
-from autogen_framework import *
+from helper_autogen import *
 
 
 def long_method_operation(unreadable_code, file_name, iterations_counter, file_dir, test_file_dir, test_file_name, file_path):
@@ -26,11 +26,11 @@ def long_method_operation(unreadable_code, file_name, iterations_counter, file_d
                 try:
                     # Try to compile the code to check for syntax errors
                     compile(altered_code_segment, file_name, 'exec')
-                    print_colored(f"Compilation success in file {file_name}", 'green')
+                    print_colored(f"Compilation success in file {file_name}", 'green') if not suppress_misc_info else None
                 except SyntaxError as e:
-                    print_colored(f"Syntax error in file {file_name}: {e}", 'magenta')
+                    print_colored(f"Syntax error in file {file_name}: {e}", 'magenta') if not suppress_misc_info else None
                     print_colored('The following Code Segment did not pass the unit_test:\n\n'
-                                  + str(altered_code_segment), 'red')
+                                  + str(altered_code_segment), 'red') if not suppress_misc_info else None
                 else:
                     # If no compilation errors - replace the original segment inside unreadable_code
                     if len(altered_code_segment) > 1:
@@ -58,10 +58,10 @@ def long_method_operation(unreadable_code, file_name, iterations_counter, file_d
 
                     if test_result == 'All tests passed.':
                         # Do nothing basically
-                        print(test_result)
+                        print(test_result) if not suppress_misc_info else None
                     elif test_result == 'Some tests failed.':
                         # Revert changes (take the code before we replaced the modified code segment and save it in place of the currently modified file)
-                        print(test_result)
+                        print(test_result) if not suppress_misc_info else None
                         with open(file_path, 'w') as file:
                             file.write(previously_unreadable_code)
                         unreadable_code = previously_unreadable_code
@@ -120,10 +120,10 @@ def short_method_operation(unreadable_code, file_name, iterations_counter, file_
 
             if test_result == 'All tests passed.':
                 # Do nothing basically
-                print(test_result)
+                print(test_result) if not suppress_misc_info else None
             elif test_result == 'Some tests failed.':
                 # Revert changes (take the code before we replaced the modified code segment and save it in place of the currently modified file)
-                print(test_result)
+                print(test_result) if not suppress_misc_info else None
                 with open(file_path, 'w') as file:
                     file.write(previously_unreadable_code)
                 unreadable_code = previously_unreadable_code

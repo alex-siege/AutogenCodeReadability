@@ -85,8 +85,8 @@ def run_pytest_and_report(test_file_directory, test_file_name, mod_file_director
 def run_and_report_pytest(test_file_path):
     """ Run pytest and report results. """
     result = subprocess.run(['pytest', str(test_file_path)], capture_output=True, text=True)
-    print(result.stdout)
-    print(result.stderr)
+    print(result.stdout) if not suppress_misc_info else None
+    print(result.stderr) if not suppress_misc_info else None
     return "All tests passed." if result.returncode == 0 else "Some tests failed."
 
 
