@@ -12,4 +12,3 @@ file_matplotlib_dir = 'E:/AutoGenCodeReadabilityProjects/pandas-main/pythonProje
 
 test_file_requests_dir = 'E:/AutoGenCodeReadabilityProjects/pandas-main/pythonProject/.venv/Lib/site-packages/requests/tests/test_utils.py'
 file_requests_dir = 'E:/AutoGenCodeReadabilityProjects/pandas-main/pythonProject/.venv/Lib/site-packages/requests/utils.py'  # 1024 LOC
-

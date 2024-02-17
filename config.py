@@ -3,10 +3,10 @@ import os
 
 # 1. Define a Custom Name for your Project
 # project_name = 'Pandas_Select'
-project_name = 'Pandas_Select_GPT3_guided'
+project_name = 'Pandas_Select_GPT3_free5'
 use_gui = False  # TODO: GUI not fully working yet
-suppress_autogen_conversation = True
-suppress_misc_info = True
+suppress_autogen_conversation = False
+suppress_misc_info = False
 
 # 2. Location where to paste your Project for enhancing readability (don't change)
 # Define the base path as the current working directory
@@ -54,7 +54,9 @@ else:
 # 2.1 Directories of files to be modified =======================================================================================
 # For all these definitions below the order is important
 directories_that_contain_files_to_be_modified = ['E:/AutoGenCodeReadabilityProjects/pandas-main/pythonProject/.venv/Lib/site-packages/pandas/core/sorting.py',
-                                                 'E:/AutoGenCodeReadabilityProjects/pandas-main/pythonProject/.venv/Lib/site-packages/torch/fx/passes/pass_manager.py']
-# directories_that_contain_test_files = []
-directories_that_contain_test_files = ['E:/AutoGenCodeReadabilityProjects/pandas-main/pythonProject/.venv/Lib/site-packages/pandas/tests/indexes/multi/test_sorting.py',
-                                       'E:/AutoGenCodeReadabilityProjects/pandas-main/pythonProject/.venv/Lib/site-packages/torch/fx/passes/tests/test_pass_manager.py']
+                                                 'E:/AutoGenCodeReadabilityProjects/pandas-main/pythonProject/.venv/Lib/site-packages/torch/fx/passes/pass_manager.py',
+                                                 'E:/AutoGenCodeReadabilityProjects/pandas-main/pythonProject/.venv/Lib/site-packages/flask/helpers.py']
+directories_that_contain_test_files = []
+# directories_that_contain_test_files = ['E:/AutoGenCodeReadabilityProjects/pandas-main/pythonProject/.venv/Lib/site-packages/pandas/tests/indexes/multi/test_sorting.py',
+#                                        'E:/AutoGenCodeReadabilityProjects/pandas-main/pythonProject/.venv/Lib/site-packages/torch/fx/passes/tests/test_pass_manager.py',
+#                                        '']

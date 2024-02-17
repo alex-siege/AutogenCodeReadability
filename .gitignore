@@ -25,7 +25,6 @@ venv/
 *.swp
 
 # User-specific project directories
-your_project/
 your_project_edit/
 
 # Other directories
