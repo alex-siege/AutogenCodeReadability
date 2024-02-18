@@ -48,8 +48,8 @@ inside the Code for others to use it.
 - Under 'System variables' (for all users) or 'User variables' (for your user only), click 'New'
 - Create a new environment variable named `OPENAI_API_KEY`
 - Enter your actual OpenAI API key as the variable value
-- Click 'OK' to close each dialog
-- 
+- Click 'OK' to close all dialogs
+
 ## 3. Some Notes and Troubleshooting
 ### How to get an OpenAI API Key?
 - Log into your OpenAI account and visit: [OpenAI API Keys](https://platform.openai.com/account/api-keys)
