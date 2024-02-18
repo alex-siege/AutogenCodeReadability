@@ -2,7 +2,7 @@ import sys, os, re
 from PyQt5.QtWidgets import QMessageBox, QApplication, QLabel, QLineEdit, QPushButton, QComboBox, QTextEdit, QVBoxLayout, QHBoxLayout, QWidget, QMainWindow, QFileDialog
 from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtCore import QUrl
-import config
+import main_config
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -94,15 +94,15 @@ class MainWindow(QMainWindow):
         text = self.textProjectName.text()
         sanitized_text = re.sub(r'\W+', '', text.replace(' ', '_'))  # Replace spaces with underscores and remove special chars
         # global config.project_name
-        config.project_name = sanitized_text
+        user_config.project_name = sanitized_text
         # Reflect changes in the QLineEdit, if necessary
         self.textProjectName.setText(sanitized_text)
         print(config.project_name)
-        # Consider writing the change back to config.py if needed
+        # Consider writing the change back to main_config.py if needed
 
     def openEnhancedFilesDir(self):
-        # Get the directory path from config.py
-        directory_path = config.edit_readable_project
+        # Get the directory path from main_config.py
+        directory_path = user_config.edit_readable_project
         # Check if the directory exists
         if os.path.exists(directory_path):
             # Open the directory in the system's file explorer
@@ -117,7 +117,7 @@ class MainWindow(QMainWindow):
         self.testFilesPreview.clear()
         global directories_that_contain_test_files
         directories_that_contain_test_files = self.selectedTestFiles
-        # Consider writing the change back to config.py if needed
+        # Consider writing the change back to main_config.py if needed
 
     def clearFilesToEdit(self):
         # Clear the list and the preview
@@ -125,20 +125,20 @@ class MainWindow(QMainWindow):
         self.editFilesPreview.clear()
         global directories_that_contain_files_to_be_modified
         directories_that_contain_files_to_be_modified = self.selectedFilesToEdit
-        # Consider writing the change back to config.py if needed
+        # Consider writing the change back to main_config.py if needed
 
 
     def updateApiKey(self):
         # Strip potential quotes from the input
         cleaned_key = self.textApiKey.text().strip("\"'")
         # Wrap the cleaned key in single quotes
-        config.oai_api_key = f"'{cleaned_key}'"
+        user_config.oai_api_key = f"'{cleaned_key}'"
         print(config.oai_api_key)
 
     def updateModel(self, model):
-        config.llm_model = model
-        print('Chosen LLM Model: ' + str(config.llm_model))
-        # Consider writing the change back to config.py if needed
+        user_config.llm_model = model
+        print('Chosen LLM Model: ' + str(main_config.llm_model))
+        # Consider writing the change back to main_config.py if needed
 
     def selectTestFiles(self):
         files, _ = QFileDialog.getOpenFileNames(self, "Select test files", "", "Python Files (*.py)")
@@ -152,7 +152,7 @@ class MainWindow(QMainWindow):
             global directories_that_contain_test_files
             directories_that_contain_test_files = self.selectedTestFiles
             print("directories_that_contain_test_files:\n" + str(directories_that_contain_test_files))
-            # Consider writing the change back to config.py if needed
+            # Consider writing the change back to main_config.py if needed
 
     def selectFilesToEdit(self):
         files, _ = QFileDialog.getOpenFileNames(self, "Select Files to Edit", "", "Python Files (*.py)")
@@ -166,7 +166,7 @@ class MainWindow(QMainWindow):
             global directories_that_contain_files_to_be_modified
             directories_that_contain_files_to_be_modified = self.selectedFilesToEdit
             print("directories_that_contain_files_to_be_modified:\n" + str(directories_that_contain_files_to_be_modified))
-            # Consider writing the change back to config.py if needed
+            # Consider writing the change back to main_config.py if needed
 
     def runMainLoop(self):
         from main import main_loop  # Import the function here to avoid circular imports

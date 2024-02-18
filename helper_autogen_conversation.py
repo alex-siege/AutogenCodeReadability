@@ -1,9 +1,7 @@
-from autogen import AssistantAgent, UserProxyAgent, ConversableAgent, config_list_from_json
-from autogen.agentchat.contrib.teachable_agent import TeachableAgent
 from helper_global import *
-from config import *
+from main_config import *
 import itertools
-from custom_conversable_agent import CustomConversableAgent
+from helper_autogen_conversable_agent import CustomConversableAgent
 
 
 def run_autogen_conversation(reply_save_path, iterations_counter, unreadable_code, partial_script):
@@ -13,18 +11,6 @@ def run_autogen_conversation(reply_save_path, iterations_counter, unreadable_cod
         system_message_editor = read_txt('system_messages/system_message_editor_partial.txt')
     else:
         system_message_editor = read_txt('system_messages/system_message_editor.txt')
-
-    # editor = ConversableAgent(
-    #     name='Editor',
-    #     system_message=system_message_editor,
-    #     code_execution_config=False,
-    #     is_termination_msg=is_termination_msg,
-    #     llm_config=config_list_llm_for_autogen,
-    #     function_map={"refactor_method_name": refactor_method_name},
-    #     reply_save_path=reply_save_path,
-    #     max_consecutive_auto_reply=5,
-    #     human_input_mode='NEVER'
-    # )
 
     editor = CustomConversableAgent(
         name='Editor',
@@ -39,7 +25,7 @@ def run_autogen_conversation(reply_save_path, iterations_counter, unreadable_cod
     )
 
     # 1.3 Creating Reviewer
-    reviewer = ConversableAgent(
+    reviewer = CustomConversableAgent(
         name='Reviewer',
         system_message=read_txt('system_messages/system_message_reviewer.txt'),
         code_execution_config=False,

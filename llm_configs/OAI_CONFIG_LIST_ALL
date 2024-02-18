@@ -5,62 +5,14 @@
     },
     {
         "model": "gpt-3.5-turbo-0125",
+        "seed": 42,
         "cache_seed": 42,
         "temperature": 0
     },
     {
-        "model": "gpt-3.5-turbo-0125",
-        "cache_seed": 42,
-        "temperature": 0,
-        "functions": [
-            {
-                "name": "refactor_method_name",
-                "description": "Refactors the name of a method in a specified file within a Python project. It handles the process of renaming a method, ensuring that all references to the method within the project are updated. This includes updates in import statements and method calls.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "old_method_name": {
-                            "type": "string",
-                            "description": "The current name of the method that has to be refactored."
-                        },
-                        "new_method_name": {
-                            "type": "string",
-                            "description": "The new name to be assigned to the method."
-                        }
-                    },
-                    "required": ["old_method_name", "new_method_name"]
-                }
-            }
-        ]
-    },
-    {
-        "model": "gpt-4-1106-preview",
+        "model": "gpt-4-turbo-preview",
+        "seed": 42,
         "cache_seed": 42,
         "temperature": 0
-    },
-    {
-        "model": "gpt-4-1106-preview",
-        "cache_seed": 42,
-        "temperature": 0,
-        "functions": [
-            {
-                "name": "refactor_method_name",
-                "description": "Refactors the name of a method in a specified file within a Python project using the Rope library. It handles the process of renaming a method, ensuring that all references to the method within the project are updated. This includes updates in import statements and method calls.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "old_method_name": {
-                            "type": "string",
-                            "description": "The current name of the method that is to be refactored."
-                        },
-                        "new_method_name": {
-                            "type": "string",
-                            "description": "The new name to be assigned to the method."
-                        }
-                    },
-                    "required": ["old_method_name", "new_method_name"]
-                }
-            }
-        ]
     }
 ]

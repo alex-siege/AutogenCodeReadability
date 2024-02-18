@@ -47,7 +47,7 @@ def main_loop():
         previous_mi = retrieve_readability_index_from_csv(
             edit_readability_rating_project, file_name, 'MI')
 
-        print('Previous and Current MI: ' + str(previous_mi) + ' ' + str(current_mi)) if not suppress_misc_info else None
+        print('Previous and Current MI: ' + str(previous_mi) + ' ' + str(current_mi)) if not suppress_miscellaneous_info else None
 
         # 2.6 Set up the while-loop that iterates over the
         # Runs at least once and as long as there's Improvement of the Maintainability Index in any of the files
@@ -62,27 +62,27 @@ def main_loop():
             with open(file_path, 'r') as file:
                 unreadable_code = file.read()
 
-            # 2.6.2 Distinguishing between too long py-files and those that can be fed into the LLM as whole
+            # 2.6.2 Distinguishing between too long py-files and those that can be fed into the LLM as whole ...
             if has_multiple_methods_or_classes(unreadable_code) and len(unreadable_code.split('\n')) > 100:
                 long_method_operation(
                     unreadable_code, file_name, iterations_counter, file_dir, test_file_dir, test_file_name, file_path)
 
-            # 2.6.3 Feeding whole py-file into LLM as its length does not exceed the LLMs capacity
+            # ... or feeding whole py-file into LLM as its length does not exceed the LLMs capacity
             else:
                 short_method_operation(
                     unreadable_code, file_name, iterations_counter, file_dir, test_file_dir, test_file_name, file_path)
 
-            # 2.6.4 Perform Readability Check after Operation
+            # 2.6.3 Perform Readability Check after Operation
             autoformat_py_files(edit_readable_project)
             if iterations_counter > 1:
                 previous_mi = current_mi
             check_readability_single(
                 edit_readable_project, edit_readability_rating_project, 'Iter. ' + str(iterations_counter), file_name)
 
-            # 2.6.5 Update the readability measurement in order to decide if to continue running the while-loop
+            # 2.6.4 Update the readability measurement in order to decide if to continue running the while-loop
             current_mi = retrieve_readability_index_from_csv(
                 edit_readability_rating_project, file_name, 'MI')
-            print('Previous and Current MI After: ' + str(previous_mi) + ' ' + str(current_mi)) if not suppress_misc_info else None
+            print('Previous and Current MI After: ' + str(previous_mi) + ' ' + str(current_mi)) if not suppress_miscellaneous_info else None
 
     # 3. Visualizing Results ====================================================================================================
     plot_readability_metrics(
