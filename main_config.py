@@ -10,7 +10,7 @@ suppress_autogen_conversation = False  # select True if you are not interested i
 suppress_miscellaneous_info = False  # select True if you want to see less cluttering in the console output
 
 # 1.2 Chose a LLM-Model ()
-oai_api_key = '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'  # Your OpenAI API Key goes inside these brackets (in case you did not set it up as an environment variable)
+oai_api_key = ''  # Your OpenAI API Key goes inside these brackets (in case you did not set it up as an environment variable)
 available_llm_models = ['', 'gpt-3.5-turbo-0125', 'gpt-4-turbo-preview']
 user_specified_llm = 1  # select the specific ChatGPT version to use from the 'available_llm_models' list where:
 # 0 = local-llm(with LM-Studio),  1 = gpt-3.5-turbo-0125,  2 = gpt-4-turbo-preview
