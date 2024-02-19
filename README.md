@@ -18,7 +18,7 @@ to verify that readability optimizations do not introduce errors or alter the in
 
 ## 1. Set Up this Project:
 - clone this repository to your local drive
-- create a new .venv with python (Version: >= 3.8, <3.13) as the base interpreter 
+- create a new .venv with python (Version: >= 3.8, <3.13) as the base interpreter. Here's a short [Video Tutorial](https://youtu.be/f4f7TYAHHvw)
 - run the following command in the terminal within your IDE: `python -m pip install -r requirements.txt`
 
 ## 2. Running the Script
