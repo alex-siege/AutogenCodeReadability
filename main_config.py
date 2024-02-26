@@ -1,33 +1,35 @@
 from autogen import config_list_from_json
 import os
 from helper_config import *
+from helper_global import get_all_py_files_paths
 
 # 1. Project Set-Up (Settings for the User) =====================================================================================
 # 1.1 Chose Project Name and set verbosity of the script (amount of output in the console)
-project_name = format_project_name('Chose_a_Project_Name')  # (avoid using blank lines and special characters)
+project_name = format_project_name('Chose_a_Project_Name2')  # (avoid using blank lines and special characters)
 use_gui = False  # TODO: GUI not fully working yet
 suppress_autogen_conversation = False  # select True if you are not interested in seeing the conversation between the agents
 suppress_miscellaneous_info = False  # select True if you want to see less cluttering in the console output
 
 # 1.2 Chose a LLM-Model ()
-oai_api_key = ''  # Your OpenAI API Key goes inside these brackets (in case you did not set it up as an environment variable)
+oai_api_key = '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'  # Your OpenAI API Key goes inside these brackets (in case you did not set it up as an environment variable)
 available_llm_models = ['', 'gpt-3.5-turbo-0125', 'gpt-4-turbo-preview']
 user_specified_llm = 1  # select the specific ChatGPT version to use from the 'available_llm_models' list where:
 # 0 = local-llm(with LM-Studio),  1 = gpt-3.5-turbo-0125,  2 = gpt-4-turbo-preview
 
 # 1.3 Chose the path of the files that are subject for change
-# 1.3.1 Chose the files that are subject for change e.g:
+# 1.3.1 Chose the files that are subject for change ...
 directories_that_contain_files_to_be_modified = \
-    ['E:/AutoGenCodeReadabilityProjects/pandas-main/pythonProject/.venv/Lib/site-packages/pandas/core/sorting.py',
-     'E:/AutoGenCodeReadabilityProjects/pandas-main/pythonProject/.venv/Lib/site-packages/torch/fx/passes/pass_manager.py']
+    ['E:/AutogenCodeReadabilityTest/AutogenCodeReadability/main.py']
+# ... in case you are not providing any test-files, you can use this line of code to grab all files of the directory you are providing
+# directories_that_contain_files_to_be_modified = get_all_py_files_paths('E:/AutogenCodeReadabilityTest/AutogenCodeReadability')
 
 # 1.3.2 Chose the files that are used as test-files in order to make sure that the changes in 1.3.1 are valid
 directories_that_contain_test_files = []  # You can leave the list empty (to skip the verification after each alteration) ...
 
 # ... or provide the corresponding test-file paths in the same order as the files to be altered in 1.3.1 e.g:
-directories_that_contain_test_files = \
-    ['E:/AutoGenCodeReadabilityProjects/pandas-main/pythonProject/.venv/Lib/site-packages/pandas/tests/indexes/multi/test_sorting.py',
-     'E:/AutoGenCodeReadabilityProjects/pandas-main/pythonProject/.venv/Lib/site-packages/torch/fx/passes/tests/test_pass_manager.py']
+# directories_that_contain_test_files = \
+#     ['E:/AutoGenCodeReadabilityProjects/pandas-main/pythonProject/.venv/Lib/site-packages/pandas/tests/indexes/multi/test_sorting.py',
+#      'E:/AutoGenCodeReadabilityProjects/pandas-main/pythonProject/.venv/Lib/site-packages/torch/fx/passes/tests/test_pass_manager.py']
 # Note: The test files should already be set up in the corresponding .venv such that when you run them in their location
 # they are able to execute the pytest properly with no errors
 

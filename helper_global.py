@@ -339,34 +339,27 @@ def is_termination_msg(message):
     return any(termination_string in no_python_code for termination_string in termination_strings)
 
 
-def get_all_py_files(dict_path):
+def get_all_py_files_paths(dict_path):
     """
-    Reads all Python (.py) files in a given directory and stores their contents in a dictionary.
+    Lists all Python (.py) files in a given directory with their full or relative paths.
 
     Args:
     dict_path (str): The directory path where the .py files are located.
 
     Returns:
-    dict: A dictionary where each key is the name of a .py file (without extension)
-          and its corresponding value is the content of that file.
+    list: A list containing the full or relative paths of all .py files in the directory.
     """
-    # Dictionary to store the contents of each file
-    file_contents = {}
+    # List to store the paths of each file
+    file_paths = []
 
     # Iterate over all .py files in the directory
     for filepath in glob.glob(os.path.join(dict_path, '*.py')):
-        # Extract the filename without extension
-        filename = os.path.basename(filepath).split('.')[0]
+        # Add the full (or relative) path to the list
+        file_paths.append(filepath)
 
-        # Open and read the content of the file
-        with open(filepath, 'r') as file:
-            content = file.read()
+    # Return the list containing paths
+    return file_paths
 
-        # Store the content in the dictionary with the filename as the key
-        file_contents[filename] = content
-
-    # Return the dictionary containing file contents
-    return file_contents
 
 
 def refactor_method_name(old_method_name, new_method_name):
