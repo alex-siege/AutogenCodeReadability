@@ -1,0 +1,3 @@
+Iter,Cyclomatic Complexity (CC),Lines of Code (LOC),Logical Lines of Code (LLOC),Source Lines of Code (SLOC),Comments,Comment Blocks,Blank Lines,Single Comments,Distinct Operators (H1),Distinct Operands (H2),Total Number of Operators (N1),Total Number of Operands (N2),Vocabulary,Length,Calculated Length,Volume,Difficulty,Effort,Time,Bugs,Maintainability Index (MI)
+Base,9,1094,551,580,97,189,233,92,19,173,117,210,192,327,1366.9,2480.28,11.53,28602.1,1589.01,0.83,25.17
+Iter. 1,7,1920,719,714,259,567,416,223,18,179,114,205,197,319,1414.66,2431.43,10.31,25061.43,1392.3,0.81,16.53
