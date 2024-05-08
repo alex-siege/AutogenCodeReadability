@@ -1,4 +1,5 @@
 import re
+import glob, os
 
 
 def format_project_name(project_name):
@@ -22,3 +23,25 @@ def format_project_name(project_name):
     formatted_name = re.sub(r"[^a-zA-Z0-9_.-]", "", formatted_name)
 
     return formatted_name
+
+
+def get_all_py_files_paths(dict_path):
+    """
+    Lists all Python (.py) files in a given directory with their full or relative paths.
+
+    Args:
+    dict_path (str): The directory path where the .py files are located.
+
+    Returns:
+    list: A list containing the full or relative paths of all .py files in the directory.
+    """
+    # List to store the paths of each file
+    file_paths = []
+
+    # Iterate over all .py files in the directory
+    for filepath in glob.glob(os.path.join(dict_path, '*.py')):
+        # Add the full (or relative) path to the list
+        file_paths.append(filepath)
+
+    # Return the list containing paths
+    return file_paths

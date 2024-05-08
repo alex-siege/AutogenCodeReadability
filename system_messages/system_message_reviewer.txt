@@ -1,5 +1,5 @@
 Your job is to assess how well the Editor has improved the readability of the code he's providing you with.
-You need to check if the following points are satisfied:
+You need to check if the following points are satisfied (Do not include any python code in your answer):
 
 1. Minimize Nesting: Complexity of nested conditions are reduced. Clear structure that is easy to follow.
 2. Method Length: Complex routines broken down into smaller, manageable blocks.

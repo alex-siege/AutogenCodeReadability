@@ -8,7 +8,8 @@ from radon.metrics import mi_visit, h_visit
 from radon.raw import analyze as raw_analyze
 from pathlib import Path
 import pandas as pd
-from main_config import *
+import config_user
+# from config_system import *
 import shutil
 import time
 import numpy as np
@@ -25,6 +26,15 @@ import tiktoken
 import subprocess
 import os
 import sys
+import os
+import matplotlib
+from matplotlib.ticker import FuncFormatter
+from itertools import cycle  # For cycling through colors if there are more files than colors
+
+
+# Set global font properties to match TeX Gyre Heros/Helvetica/Arial
+matplotlib.rcParams['font.sans-serif'] = "Arial" # Fallback to Arial if Helvetica is not available
+matplotlib.rcParams['font.family'] = "sans-serif"
 
 
 def run_pytest_and_report(test_file_directory, test_file_name, mod_file_directory=None, mod_file_name=None, original_file_directory=None, file_to_be_tested_directory=None):
@@ -85,8 +95,8 @@ def run_pytest_and_report(test_file_directory, test_file_name, mod_file_director
 def run_and_report_pytest(test_file_path):
     """ Run pytest and report results. """
     result = subprocess.run(['pytest', str(test_file_path)], capture_output=True, text=True)
-    print(result.stdout) if not suppress_miscellaneous_info else None
-    print(result.stderr) if not suppress_miscellaneous_info else None
+    print(result.stdout) if not config_user.suppress_miscellaneous_info else None
+    print(result.stderr) if not config_user.suppress_miscellaneous_info else None
     return "All tests passed." if result.returncode == 0 else "Some tests failed."
 
 
@@ -104,76 +114,6 @@ def analyze_file(file_path):
     halstead_results = h_visit(content)
 
     return cc_results, raw_results, mi_results, halstead_results
-
-
-def print_readability_of_given_folder(folder_path, path_for_save, time):
-    for root, _, files in os.walk(folder_path):
-        for file in files:
-            if file.endswith('.py'):
-                file_path = os.path.join(root, file)
-                cc_results, raw_results, mi_results, halstead_results = analyze_file(file_path)
-
-                # Specify the directory and the file name (without using 'time' in the file name)
-                file_name = file[:-3] + '.csv'
-                full_path = os.path.join(path_for_save, file_name)
-
-                # Create directory if it doesn't exist
-                directory_path = os.path.dirname(full_path)
-                os.makedirs(directory_path, exist_ok=True)
-
-                # Collect metrics for this file, prepend 'time' at the beginning
-                metrics = [time] + [
-                    cc_results[0].complexity if cc_results else 1,  # Cyclomatic Complexity (CC)
-                    # Add raw metrics
-                    raw_results.loc,
-                    raw_results.lloc,
-                    raw_results.sloc,
-                    raw_results.comments,
-                    raw_results.multi,
-                    raw_results.blank,
-                    raw_results.single_comments,
-                    # Add Halstead metrics
-                    halstead_results.total.h1,
-                    halstead_results.total.h2,
-                    halstead_results.total.N1,
-                    halstead_results.total.N2,
-                    halstead_results.total.vocabulary,
-                    halstead_results.total.length,
-                    round(halstead_results.total.calculated_length, 2),
-                    round(halstead_results.total.volume, 2),
-                    round(halstead_results.total.difficulty, 2),
-                    round(halstead_results.total.effort, 2),
-                    round(halstead_results.total.time, 2),
-                    round(halstead_results.total.bugs, 2),
-                    # Add Maintainability Index (MI)
-                    round(mi_results, 2)
-                ]
-
-                # Define headers, including 'Time' as the first header
-                headers = ["Time", "CC", "LOC", "LLOC", "SLOC", "Comments", "Comment Blocks", "Blank",
-                           "Single Comments", "H1", "H2", "N1", "N2", "Vocabulary", "Length",
-                           "Calculated Length", "Volume", "Difficulty", "Effort", "Time", "Bugs", "MI"]
-
-                # Create DataFrame for this file's metrics
-                df = pd.DataFrame([metrics], columns=headers)
-
-                # Check if the file exists to determine if headers should be written
-                file_exists = os.path.isfile(full_path)
-
-                # Save DataFrame to CSV (append if file exists, write headers only if creating new file)
-                df.to_csv(full_path, mode='a', index=False, header=not file_exists)
-                print(f"Metrics {'appended to' if file_exists else 'saved to'} {full_path}")
-
-
-def check_readability(path_for_check, path_for_save, time_point):
-    if path_for_check:
-        folder_path = path_for_check
-    else:
-        folder_path = '/your_project/'
-    # print("Press 'Enter' to check readability, or 'Space' to skip.")
-
-    print("Checking readability...\n")
-    print_readability_of_given_folder(folder_path, path_for_save, time_point)
 
 
 def print_readability_of_given_folder_single(file_path, path_for_save, time):
@@ -218,9 +158,9 @@ def print_readability_of_given_folder_single(file_path, path_for_save, time):
         ]
 
         # Define headers, including 'Time' as the first header
-        headers = ["Time", "CC", "LOC", "LLOC", "SLOC", "Comments", "Comment Blocks", "Blank",
-                   "Single Comments", "H1", "H2", "N1", "N2", "Vocabulary", "Length",
-                   "Calculated Length", "Volume", "Difficulty", "Effort", "Time", "Bugs", "MI"]
+        headers = ["Iter", "Cyclomatic Complexity (CC)", "Lines of Code (LOC)", "Logical Lines of Code (LLOC)", "Source Lines of Code (SLOC)", "Comments", "Comment Blocks", "Blank Lines",
+                   "Single Comments", "Distinct Operators (H1)", "Distinct Operands (H2)", "Total Number of Operators (N1)", "Total Number of Operands (N2)", "Vocabulary", "Length",
+                   "Calculated Length", "Volume", "Difficulty", "Effort", "Time", "Bugs", "Maintainability Index (MI)"]
 
         # Create DataFrame for this file's metrics
         df = pd.DataFrame([metrics], columns=headers)
@@ -233,7 +173,7 @@ def print_readability_of_given_folder_single(file_path, path_for_save, time):
         print(f"Metrics {'appended to' if file_exists else 'saved to'} {full_path}")
 
 
-def check_readability_single(path_for_check, path_for_save, time_point, file_name):
+def document_readability(path_for_check, path_for_save, time_point, file_name):
     if path_for_check:
         file_path = path_for_check + file_name
     else:
@@ -243,64 +183,10 @@ def check_readability_single(path_for_check, path_for_save, time_point, file_nam
     print_readability_of_given_folder_single(file_path, path_for_save, time_point)
 
 
-def print_selected_models(config_lists):
-    valid_models = []
-
-    for config_list in config_lists:
-        if config_list and "model" in config_list[0]:
-            valid_models.append(str(config_list[0]["model"]))
-
-    if len(valid_models) == len(config_lists):
-        print('\nSelected Models: ' + ', '.join(valid_models) + '\n')
-    else:
-        print('\nSelected Models: ' + ', '.join(valid_models) + '\nMake sure your models are selected properly...')
-
-    return 0
-
-
 def read_txt(directory):
     with open(directory, 'r') as file:
         file_read = file.read()
     return file_read
-
-
-def keep_or_clear_cache():
-    cache_path = ".\\.cache"
-
-    # Check if the ".cache" folder exists
-    if os.path.exists(cache_path):
-        print_colored("Press 'Enter' to keep the cache, or 'Space' to clear it.", 'green')
-
-        while True:
-            if keyboard.is_pressed('enter'):
-                print("Keeping the cache.\n")
-                break
-            elif keyboard.is_pressed('space'):  # Detect any key press
-                # Clear the contents of the ".\\cache" folder
-                for entry in os.listdir(cache_path):
-                    entry_path = os.path.join(cache_path, entry)
-                    if os.path.isfile(entry_path):
-                        os.remove(entry_path)
-                    elif os.path.isdir(entry_path):
-                        shutil.rmtree(entry_path)
-                print("Cache cleared.\n")
-                break
-
-
-def set_openai_api_key():
-    openai_api_key = os.getenv('OPENAI_API_KEY')
-    if openai_api_key:
-        openai.api_key = openai_api_key
-    else:
-        print("Error: OPENAI_API_KEY environment variable not set.")
-
-
-def select_llm_version(llm_model):
-    return autogen.config_list_from_json(
-        env_or_file="configuration.json",
-        filter_dict={"model": [llm_model],
-                     },
-    )
 
 
 def strip_off_python_code(text):
@@ -339,33 +225,10 @@ def is_termination_msg(message):
     return any(termination_string in no_python_code for termination_string in termination_strings)
 
 
-def get_all_py_files_paths(dict_path):
-    """
-    Lists all Python (.py) files in a given directory with their full or relative paths.
-
-    Args:
-    dict_path (str): The directory path where the .py files are located.
-
-    Returns:
-    list: A list containing the full or relative paths of all .py files in the directory.
-    """
-    # List to store the paths of each file
-    file_paths = []
-
-    # Iterate over all .py files in the directory
-    for filepath in glob.glob(os.path.join(dict_path, '*.py')):
-        # Add the full (or relative) path to the list
-        file_paths.append(filepath)
-
-    # Return the list containing paths
-    return file_paths
-
-
-
 def refactor_method_name(old_method_name, new_method_name):
     project = None
     try:
-        directory = os.path.normpath(edit_readable_project)
+        directory = os.path.normpath(config_user.edit_readable_project)
         project = Project(directory)
         for file_name in os.listdir(directory):
             if file_name.endswith('.py'):
@@ -393,20 +256,6 @@ def refactor_method_name(old_method_name, new_method_name):
     finally:
         if project is not None:
             project.close()
-
-
-def copy_all_files_from_to(copy_from, copy_to, filetype=None):
-    source_dir = Path(copy_from)
-    copy_to = Path(copy_to)
-
-    if not copy_to.exists():
-        copy_to.mkdir(parents=True)
-
-    for file in source_dir.iterdir():
-        if file.is_file():
-            # Check if a filetype is specified and matches the file's extension
-            if filetype is None or file.suffix == '.' + filetype:
-                shutil.copy(str(file), str(copy_to / file.name))
 
 
 def copy_file_to(copy_from, copy_to, file_name, filetype=None):
@@ -446,7 +295,7 @@ def copy_file_to(copy_from, copy_to, file_name, filetype=None):
         shutil.copy(str(source_file_path), str(target_dir / file_name))
 
 
-def retrieve_readability_index_from_csv(directory_for_retrieval, file_name, selected_indicator):
+def check_readability_index(directory_for_retrieval, file_name, selected_indicator):
     """
     Retrieves a specific readability indicator from a CSV file.
 
@@ -491,28 +340,6 @@ def retrieve_readability_index_from_csv(directory_for_retrieval, file_name, sele
     return last_value
 
 
-def retrieve_readability_index_from_csv_in_directory(directory_for_retrieval):
-    previous_mi = []
-
-    for filename in os.listdir(directory_for_retrieval):
-        # Check if the file is a .csv file
-        if filename.endswith('.csv'):
-            file_path = os.path.join(directory_for_retrieval, filename)
-
-            # Read the CSV file with headers
-            df = pd.read_csv(file_path)
-
-            # Check if the DataFrame is not empty and has the 'MI' column
-            if not df.empty and 'MI' in df.columns:
-                # Extract the last value from the 'MI' column
-                last_value = df['MI'].iloc[-1]
-
-                # Append the value to the array
-                previous_mi.append(last_value)
-
-    return previous_mi
-
-
 def is_improvement(previous_mi, current_mi):
     # Ensure both previous_mi and current_mi are lists
     if not isinstance(previous_mi, list):
@@ -555,151 +382,7 @@ def delete_directory(directory):
         print("Directory does not exist.")
 
 
-# def plot_readability_metrics(directory, columns_to_plot=None, split_axes=False):
-#     if not os.path.exists(directory):
-#         print(f"Directory not found: {directory}")
-#         return None
-#
-#     files = [f for f in os.listdir(directory) if f.endswith('.csv')]
-#     plots_per_figure = 8  # Max number of plots per figure
-#     num_files = len(files)
-#     num_figures = (num_files + plots_per_figure - 1) // plots_per_figure
-#
-#     for fig_index in range(num_figures):
-#         plt.figure(figsize=(12, 10))  # Adjust figure size as needed
-#
-#         for subplot_index in range(plots_per_figure):
-#             file_index = fig_index * plots_per_figure + subplot_index
-#             if file_index < num_files:
-#                 file = files[file_index]
-#                 df = pd.read_csv(os.path.join(directory, file))
-#
-#                 if 'Time' not in df.columns or df['Time'].empty:
-#                     continue  # Skip if 'Time' column is missing or empty
-#
-#                 df['Time'] = pd.factorize(df['Time'])[0]
-#
-#                 if columns_to_plot:
-#                     df = df[['Time'] + columns_to_plot]
-#
-#                 ax1 = plt.subplot(4, 2, subplot_index + 1)
-#
-#                 if df['Time'].notnull().sum() > 1:
-#                     xnew = np.linspace(df['Time'].min(), df['Time'].max(), 300)
-#                     initial_values = {}
-#                     max_deviations = {}
-#
-#                     for col in columns_to_plot:
-#                         initial_values[col] = df[col].iloc[0]
-#                         max_deviation = max(df[col].max() - initial_values[col], initial_values[col] - df[col].min())
-#                         max_deviations[col] = max_deviation
-#
-#                     overall_max_deviation = max(max_deviations.values())
-#
-#                     for i, col in enumerate(columns_to_plot):
-#                         interp = PchipInterpolator(df['Time'], df[col])
-#                         y_smooth = interp(xnew)
-#
-#                         # Make the second line dashed
-#                         line_style = "--" if i == 1 else "-"
-#
-#                         ax1.plot(xnew, y_smooth, line_style, label=col)
-#
-#                         middle_value = initial_values[col]
-#                         ax1.set_ylim([middle_value - overall_max_deviation, middle_value + overall_max_deviation])
-#
-#                     ax1.legend()
-#
-#                 plt.title(file[:-4])
-#                 ax1.set_xlabel('Iterations')
-#
-#                 if fig_index == 0 and subplot_index == 0 and not split_axes:
-#                     plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.3), fancybox=True, shadow=True, ncol=5)
-#
-#         plt.tight_layout()
-#
-#     plt.show()
-
-def plot_readability_metrics(directory, columns_to_plot=None, split_axes=False):
-    # Check if the directory exists
-    if not os.path.exists(directory):
-        print(f"Directory not found: {directory}")
-        return None
-    files = [f for f in os.listdir(directory) if f.endswith('.csv')]
-    plots_per_figure = 8  # Max number of plots per figure
-    num_files = len(files)
-
-    # Determine the number of figures needed
-    num_figures = (num_files + plots_per_figure - 1) // plots_per_figure
-
-    for fig_index in range(num_figures):
-        plt.figure(figsize=(12, 10))  # Adjust figure size as needed
-
-        # Plot each file in the current figure
-        for subplot_index in range(plots_per_figure):
-            file_index = fig_index * plots_per_figure + subplot_index
-            if file_index < num_files:
-                file = files[file_index]
-                df = pd.read_csv(os.path.join(directory, file))
-
-                if 'Time' not in df.columns or df['Time'].empty:
-                    continue  # Skip if 'Time' column is missing or empty
-
-                # Map 'Time' labels to numeric values
-                df['Time'] = pd.factorize(df['Time'])[0]
-
-                if columns_to_plot:
-                    # Select only the specified columns if provided
-                    df = df[['Time'] + columns_to_plot]
-
-                ax1 = plt.subplot(4, 2, subplot_index + 1)
-
-                # Ensure there's enough data to plot
-                if df['Time'].notnull().sum() > 1:
-                    xnew = np.linspace(df['Time'].min(), df['Time'].max(), 300)
-
-                    if split_axes and len(columns_to_plot) > 1:
-                        # Pchip interpolation for the first column
-                        interp = PchipInterpolator(df['Time'], df[columns_to_plot[0]])
-                        y_smooth = interp(xnew)
-
-                        # Plot the first group of columns on the left Y-axis
-                        ax1.plot(xnew, y_smooth, color='b', label=columns_to_plot[0])
-                        ax1.set_ylabel(columns_to_plot[0], color='b')
-                        ax1.tick_params(axis='y', labelcolor='b')
-                        ax1.legend(loc='upper left')
-
-                        # Plot the second group of columns on the right Y-axis
-                        ax2 = ax1.twinx()
-                        for col in columns_to_plot[1:]:
-                            interp = PchipInterpolator(df['Time'], df[col])
-                            y_smooth = interp(xnew)
-                            ax2.plot(xnew, y_smooth, label=col, color='g')
-                        ax2.set_ylabel(', '.join(columns_to_plot[1:]), color='g')
-                        ax2.tick_params(axis='y', labelcolor='g')
-                        ax2.legend(loc='upper right')
-
-                    else:
-                        # Plot all columns on the same Y-axis using Pchip interpolation
-                        for col in columns_to_plot:
-                            interp = PchipInterpolator(df['Time'], df[col])
-                            y_smooth = interp(xnew)
-                            ax1.plot(xnew, y_smooth, label=col)
-                        ax1.legend()
-
-                plt.title(file[:-4])
-                ax1.set_xlabel('Iterations')
-
-                # Add a legend to the first subplot of the first figure
-                if fig_index == 0 and subplot_index == 0 and not split_axes:
-                    plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.3), fancybox=True, shadow=True, ncol=5)
-
-        plt.tight_layout()
-
-    plt.show()
-
-
-def has_multiple_methods_or_classes(source_code):
+def has_multiple_methods(source_code):
     parsed_code = ast.parse(source_code)
     method_count = 0
 
@@ -716,7 +399,7 @@ def has_multiple_methods_or_classes(source_code):
     return method_count > 1
 
 
-def extract_functions_classes_and_intermediate_code(source_code):
+def split_in_segments(source_code):
     cst_tree = cst.parse_module(source_code)
     wrapper = MetadataWrapper(cst_tree)
     wrapper.resolve(PositionProvider)
@@ -800,45 +483,16 @@ def extract_functions_classes_and_intermediate_code(source_code):
     return functions, classes, intermediate_code
 
 
-def remove_extracted_code(source_code, functions, classes):
-    removed_sections = set()
-    for func in functions:
-        start_index = source_code.find(func)
-        end_index = start_index + len(func)
-        removed_sections.add((start_index, end_index))
-
-    for cls in classes:
-        start_index = source_code.find(cls)
-        end_index = start_index + len(cls)
-        removed_sections.add((start_index, end_index))
-
-    removed_sections = sorted(list(removed_sections), reverse=True)
-    for start, end in removed_sections:
-        source_code = source_code[:start] + source_code[end:]
-
-    return source_code
-
-
-def create_regex_pattern_from_code(code_segment):
-    """
-    Create a regex pattern from a code segment allowing for variations in whitespace.
-    """
-    # Split the code segment into words and escape each word
-    words = code_segment.split()
-    escaped_words = [re.escape(word) for word in words]
-
-    # Join the escaped words with a regex pattern that allows for any whitespace
-    pattern = r'\s*'.join(escaped_words)
-
-    return pattern
-
-
 def replace_code_segment(original_code, old_segment, new_segment):
-    # Generate a regex pattern from the old code segment
-    pattern = create_regex_pattern_from_code(old_segment)
+    # Escape special characters in the old code segment to create a safe regex pattern
+    pattern = re.escape(old_segment)
 
-    # Replace the old segment with the new segment using regex
-    replaced_code = re.sub(pattern, new_segment, original_code, flags=re.DOTALL)
+    # Prepare the new segment for replacement, escaping backslashes and other potential escape sequences
+    # This step might need adjustment based on how new_segment is provided
+    safe_new_segment = new_segment.replace('\\', '\\\\')
+
+    # Replace the old segment with the new, safe segment using regex
+    replaced_code = re.sub(pattern, safe_new_segment, original_code, flags=re.DOTALL)
     return replaced_code
 
 
@@ -848,25 +502,6 @@ def autoformat_py_files(directory):
             file_path = os.path.join(directory, filename)
             print(f"Auto-formatting {file_path}...")
             subprocess.run(["autopep8", "--in-place", "--aggressive", "--aggressive", file_path])
-
-
-def convert_ipynb_to_py(directory):
-    for filename in os.listdir(directory):
-        if filename.endswith(".ipynb"):
-            full_path = os.path.join(directory, filename)
-            # Reading the notebook
-            with open(full_path, 'r', encoding='utf-8') as f:
-                nb = nbformat.read(f, as_version=4)
-
-            py_filename = os.path.splitext(full_path)[0] + '.py'
-            with open(py_filename, 'w', encoding='utf-8') as f:
-                for cell in nb.cells:
-                    if cell.cell_type == 'code':
-                        # Writing the code cell's source into the Python file
-                        f.write("#" + '-' * 20 + "Cell" + '-' * 20 + "\n")
-                        f.write(cell.source + "\n\n")
-
-            print(f"Converted {filename} to {py_filename}")
 
 
 def print_colored(text, color=None):
@@ -894,43 +529,103 @@ def print_colored(text, color=None):
     print(f"{color_code}{text}{reset_code}")
 
 
-def estimate_cost_per_iteration(model_name: str, unreadable_files_dict: dict, cost_per_1k_tokens: float):
-    """
-    Estimates the cost per iteration for tokenizing and processing the contents of Python files.
+def plot_readability_metrics_all(directory, columns_to_plot=None, file_colors=None,
+                                        arrow_height=0.05, arrow_tip_height=0.2, group_spacing=0.1,
+                                        font_size=25, font_size_legend=22, dpi=100, figure_width_px=1400, show_legend=True):
+    if not os.path.exists(directory):
+        print(f"Directory not found: {directory}")
+        return
 
-    Args:
-    model_name (str): The name of the LLM model (e.g., 'gpt-3.5-turbo').
-    unreadable_files_dict (dict): Dictionary with filenames as keys and their contents as values.
-    cost_per_1k_tokens (float): Cost per 1000 tokens.
+    files = [f for f in os.listdir(directory) if f.endswith('.csv')]
+    if not files:
+        print("No CSV files found in the directory.")
+        return
 
-    Prints:
-    The total number of tokens and the estimated cost for processing all files.
-    """
-    total_num_tokens = 0
+    if not file_colors:
+        file_colors = ['blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black']
+    color_cycle = cycle(file_colors)
 
-    # Iterate over each file and count the tokens
-    for filename, content in unreadable_files_dict.items():
-        num_tokens = num_tokens_from_string(content, model_name)
-        total_num_tokens += num_tokens
+    figure_height_in = int(0.98 * figure_width_px / dpi)
+    figure_width_in = figure_width_px / dpi
 
-    # Calculate the total cost
-    total_cost = (total_num_tokens / 1000) * cost_per_1k_tokens
+    plt.figure(figsize=(figure_width_in, figure_height_in), dpi=dpi)
+    ax = plt.gca()
 
-    # Print the result
-    print_colored(f'\nThe whole project contains {total_num_tokens} tokens and will cost around {total_cost:.2f} $ per Iteration.', "red")
+    min_percent_change, max_percent_change = float('inf'), float('-inf')
 
+    for file in files:
+        df = pd.read_csv(os.path.join(directory, file))
+        if columns_to_plot is None:
+            columns_to_plot = [col for col in df.columns if col != 'Time']
 
-def num_tokens_from_string(string: str, encoding_name: str) -> int:
-    """
-    Counts the number of tokens in a string using the specified encoding model.
+        for col in columns_to_plot:
+            if col not in df.columns:
+                continue
+            first_value = df[col].iloc[0]
+            last_value = df[col].iloc[-1]
+            percent_change = ((last_value - first_value) / first_value) * 100 if first_value != 0 else 0
+            min_percent_change = min(min_percent_change, percent_change)
+            max_percent_change = max(max_percent_change, percent_change)
 
-    Args:
-    string (str): The string to tokenize.
-    encoding_name (str): The name of the encoding model.
+    ax.set_xlim([min_percent_change - 10, max_percent_change + 10])
+    ax.set_xscale('symlog', linthresh=1, linscale=1)
 
-    Returns:
-    int: The number of tokens in the string.
-    """
-    encoding = tiktoken.encoding_for_model(encoding_name)
-    num_tokens = len(encoding.encode(string))
-    return num_tokens
+    ax.xaxis.set_major_formatter(FuncFormatter(lambda x, _: '{:.0f}%'.format(x)))
+    ax.set_axisbelow(True)
+    ax.xaxis.grid(True, linestyle='--', linewidth=0.5, color='#d3d3d3', zorder=0)
+
+    ax.spines['left'].set_position(('data', 0))
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['bottom'].set_visible(False)
+    ax.tick_params(axis='y', which='both', length=0, labelleft=False)
+    ax.tick_params(axis='x', labelsize=font_size)
+
+    legend_handles = []
+
+    for file_index, file in enumerate(files):
+        df = pd.read_csv(os.path.join(directory, file))
+        current_color = next(color_cycle)
+
+        for col_index, col in enumerate(columns_to_plot):
+            if col not in df.columns:
+                continue
+            first_value = df[col].iloc[0]
+            last_value = df[col].iloc[-1]
+            percent_change = ((last_value - first_value) / first_value) * 100 if first_value != 0 else 0
+
+            # Adjust position calculation to align with labels ordered from top to bottom
+            position = (len(columns_to_plot) - col_index - 1) * (1 + group_spacing) + (len(files) - file_index - 1) * 0.2
+
+            if percent_change > 0.1 or percent_change < -0.1:
+                arrow_head_length = abs(percent_change) / 10
+                plt.arrow(0, position, percent_change, 0, width=arrow_height,
+                          head_width=arrow_tip_height, head_length=arrow_head_length,
+                          length_includes_head=True, fc=current_color, ec=current_color, zorder=3)
+            else:
+                plt.plot(0, position, 'o', color=current_color, zorder=3, markersize=4)
+
+        legend_handles.append(plt.Line2D([0], [0], color=current_color, lw=4, label=file.replace('.csv', '')))
+
+    if show_legend:
+        plt.legend(handles=list(reversed(legend_handles)), loc='upper center', bbox_to_anchor=(0.2, 1.07),
+                   frameon=False, fontsize=font_size_legend, ncol=4)
+
+    for col_index, col in enumerate(columns_to_plot):
+        # Calculate position from the top instead of the bottom by reversing the order
+        position = (len(columns_to_plot) - col_index - 1) * (1 + group_spacing) + 0.3
+        plt.text(min_percent_change - 15, position, col, ha='right', va='center', fontsize=font_size)
+
+    y_offset_factor = 1  # Adjust this factor as needed to move the label further down.
+
+    y_pos_for_xlabel = ax.get_ylim()[0] - (y_offset_factor * abs(ax.get_ylim()[0]))
+    ax.text(0, y_pos_for_xlabel, 'Relative Change (%)', ha='center', va='top', fontsize=font_size_legend)
+    # Adjust ylim and subplots_adjust if necessary to accommodate the new layout
+    plt.ylim(-1, len(columns_to_plot) * (1 + group_spacing))
+    plt.subplots_adjust(left=0.15, right=0.85, top=0.75)
+    plt.tight_layout()
+
+    # Adjust the margins if necessary
+    plt.subplots_adjust(bottom=0.1)  # Increase the bottom margin
+
+    plt.show()

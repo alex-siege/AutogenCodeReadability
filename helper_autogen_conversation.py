@@ -1,12 +1,13 @@
 from helper_global import *
-from main_config import *
+from config_user import *
 import itertools
 from helper_autogen_conversable_agent import CustomConversableAgent
 
 
-def run_autogen_conversation(reply_save_path, iterations_counter, unreadable_code, partial_script):
-    # 2. AutoGen Network for Operation ==============================================================================================
-    # 1.2 Creating Editor
+def autogen_conversation(reply_save_path, iterations_counter, unreadable_code, partial_script):
+    # AutoGen Network for Operation ==============================================================================================
+
+    # Creating Editor
     if partial_script:
         system_message_editor = read_txt('system_messages/system_message_editor_partial.txt')
     else:
@@ -24,7 +25,7 @@ def run_autogen_conversation(reply_save_path, iterations_counter, unreadable_cod
         human_input_mode='NEVER'
     )
 
-    # 1.3 Creating Reviewer
+    # Creating Reviewer
     reviewer = CustomConversableAgent(
         name='Reviewer',
         system_message=read_txt('system_messages/system_message_reviewer.txt'),
@@ -39,10 +40,11 @@ def run_autogen_conversation(reply_save_path, iterations_counter, unreadable_cod
     # In case of subsequent attempts to make the code more readable such that the LLM does not 'feel' forced to change up the code in case its already been changed
     system_message_initiate_chat = read_txt('system_messages/system_message_reviewer_initiate_chat.txt') \
         if iterations_counter > 1 else ''
+
     reviewer.initiate_chat(
         recipient=editor,
-        message=system_message_initiate_chat + 'Here is the code to be made more readable:\n' + unreadable_code, silent=suppress_autogen_conversation
+        message=system_message_initiate_chat + 'Here is the code to be made more readable:\n' + unreadable_code,
+        silent=suppress_autogen_conversation
     )
 
-    time.sleep(1)
-
+    time.sleep(1)  # to be kind to the API

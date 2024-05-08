@@ -1,27 +1,36 @@
 from helper_autogen_conversation import *
 
+UStutt_Dark_Blue = '#00519e'
+UStutt_Light_Blue = '#00beff'
+UStutt_Dark_Green = '#3b8c7a'
+UStutt_Light_Green = '#7d9b65'
+UStutt_Dark_Orange = '#e4af34'
+UStutt_Light_Orange = '#ecda91'
+UStutt_Dark_Red = '#950003'
+UStutt_Light_Red = '#ff0005'
 
-def long_method_operation(unreadable_code, file_name, iterations_counter, file_dir, test_file_dir, test_file_name, file_path):
+
+def long_operation(unreadable_code, file_name, iterations_counter, file_dir, test_file_dir, test_file_name, file_path):
     # Splitting the py-file up into more manageable chunks
-    functions, classes, intermediate_code = extract_functions_classes_and_intermediate_code(unreadable_code)
+    functions, classes, intermediate_code = split_in_segments(unreadable_code)
     previously_unreadable_code = ''
 
     # Iterating over the individual functions and classes:
-    for code_segment in functions + classes:
+    for code_segment in functions + classes + intermediate_code:
         # Only dealing with code segments that are reasonably sized
-        if 150 > len(code_segment.split('\n')) > 6:
+        if 1200 > len(code_segment.split('\n')) > 6:
 
             # Processing each segment with the LLM (function or class) and saving it temporarily into a separate file
-            run_autogen_conversation(
-                reply_save_path=edit_replies_project + file_name,
+            autogen_conversation(
+                reply_save_path=config_user.edit_replies_project + file_name,
                 iterations_counter=iterations_counter,
                 unreadable_code=code_segment,
                 partial_script=True
             )
 
             # Check if the altered code-segment is compilable
-            if os.path.exists(edit_replies_project + file_name):
-                with open(edit_replies_project + file_name, 'r') as altered_file:
+            if os.path.exists(config_user.edit_replies_project + file_name):
+                with open(config_user.edit_replies_project + file_name, 'r') as altered_file:
                     altered_code_segment = altered_file.read()
                 try:
                     # Try to compile the code to check for syntax errors
@@ -43,7 +52,7 @@ def long_method_operation(unreadable_code, file_name, iterations_counter, file_d
                             file.write(unreadable_code)
 
                 # Making sure to delete used code from temporary replies in order to not use it accidentally for anything else
-                delete_directory(edit_replies_project)
+                delete_directory(config_user.edit_replies_project)
                 altered_code_segment = ''
 
                 # Running unit_test now to validate code (at this stage we already replaced the code segment of the file we're modifying):
@@ -51,9 +60,9 @@ def long_method_operation(unreadable_code, file_name, iterations_counter, file_d
                     test_result = run_pytest_and_report(
                         test_file_directory=os.path.dirname(test_file_dir),
                         test_file_name=test_file_name,
-                        mod_file_directory=edit_readable_project,
+                        mod_file_directory=config_user.edit_readable_project,
                         mod_file_name=file_name,
-                        original_file_directory=edit_original_project_bu,
+                        original_file_directory=config_user.edit_original_project_bu,
                         file_to_be_tested_directory=os.path.dirname(file_dir))
 
                     if test_result == 'All tests passed.':
@@ -70,20 +79,20 @@ def long_method_operation(unreadable_code, file_name, iterations_counter, file_d
                         raise ValueError(f"Unexpected test result: {test_result}")
 
 
-def short_method_operation(unreadable_code, file_name, iterations_counter, file_dir, test_file_dir, test_file_name, file_path):
+def short_operation(unreadable_code, file_name, iterations_counter, file_dir, test_file_dir, test_file_name, file_path):
     print('The current .py-file does not contain multiple methods or classes.')
     previously_unreadable_code = ''
     code_segment = unreadable_code
-    run_autogen_conversation(
-        reply_save_path=os.path.join(edit_readable_project, file_name),
+    autogen_conversation(
+        reply_save_path=os.path.join(config_user.edit_readable_project, file_name),
         iterations_counter=iterations_counter,
         unreadable_code=code_segment,
         partial_script=False
-    ) if len(unreadable_code.split('\n')) < 200 else None
+    ) if len(unreadable_code.split('\n')) < 1200 else None
 
     # Check if the altered code-segment is compilable
-    if os.path.exists(edit_replies_project + file_name):
-        with open(edit_replies_project + file_name, 'r') as altered_file:
+    if os.path.exists(config_user.edit_replies_project + file_name):
+        with open(config_user.edit_replies_project + file_name, 'r') as altered_file:
             altered_code = altered_file.read()
         try:
             # Try to compile the code to check for syntax errors
@@ -105,7 +114,7 @@ def short_method_operation(unreadable_code, file_name, iterations_counter, file_
                     file.write(unreadable_code)
 
         # Making sure to delete used code from temporary replies in order to not use it accidentally for anything else
-        delete_directory(edit_replies_project)
+        delete_directory(config_user.edit_replies_project)
         altered_code = ''
 
         # Running unit_test now to validate code (at this stage we already replaced the code segment of the file we're modifying):
@@ -113,9 +122,9 @@ def short_method_operation(unreadable_code, file_name, iterations_counter, file_
             test_result = run_pytest_and_report(
                 test_file_directory=os.path.dirname(test_file_dir),
                 test_file_name=test_file_name,
-                mod_file_directory=edit_readable_project,
+                mod_file_directory=config_user.edit_readable_project,
                 mod_file_name=file_name,
-                original_file_directory=edit_original_project_bu,
+                original_file_directory=config_user.edit_original_project_bu,
                 file_to_be_tested_directory=os.path.dirname(file_dir))
 
             if test_result == 'All tests passed.':
